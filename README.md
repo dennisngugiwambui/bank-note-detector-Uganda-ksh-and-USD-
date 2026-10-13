@@ -34,7 +34,10 @@ docs/COUNTERFEIT_DETECTION.md
 
 ## 1. Install the APK on your phone
 
-A release APK is built at `app/build/app/outputs/flutter-apk/app-release.apk`.
+Release APKs are built in `app/build/app/outputs/flutter-apk/`:
+- `app-arm64-v8a-release.apk` (30 MB): almost every phone from 2017 onward. Use this one.
+- `app-armeabi-v7a-release.apk` (26 MB): older 32-bit phones.
+- `app-release.apk` (79 MB): works on any phone, if unsure.
 1. Copy it to the phone (USB, Google Drive, or WhatsApp to yourself).
 2. Open it on the phone. Android asks to allow installs from that source; allow it once.
 3. Grant the camera permission when the app asks.
