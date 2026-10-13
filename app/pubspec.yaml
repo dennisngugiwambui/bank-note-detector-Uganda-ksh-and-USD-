@@ -1,0 +1,35 @@
+name: banknote_identifier
+description: Offline banknote identifier (INR, KES, EGP, UGX, USD) with object detection and counterfeit screening, for blind and low-vision users.
+publish_to: "none"
+version: 0.1.0+1
+
+environment:
+  sdk: ">=3.8.0 <4.0.0"
+  flutter: ">=3.32.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  camera: ^0.11.0+2
+  tflite_flutter: ^0.11.0
+  flutter_tts: ^4.0.2
+  image: ^4.2.0
+  wakelock_plus: ^1.2.8
+  shared_preferences: ^2.3.2
+  crypto: ^3.0.5
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
+  # Every listed folder must exist. To add an authenticity model for another
+  # currency, create assets/authenticity/<ISO>/ and list it here. The app
+  # finds it at runtime through the AssetManifest, with no code change.
+  assets:
+    - assets/currency/
+    - assets/detector/
+    - assets/authenticity/UGX/
+    - assets/security_features.json

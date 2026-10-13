@@ -1,0 +1,54 @@
+# Copy to sources.yaml and point each root at your downloaded dataset.
+# Folder and class names differ between downloads, so check each `mapping`
+# against the folders you actually have. Unmapped classes are skipped and
+# listed in the output.
+#
+# Unified labels: <ISO>_<value> (INR_100, KES_50, EGP_20, UGX_5000, USD_20) or "background".
+
+sources:
+  # Kaggle Indian currency set, layout: root/<class>/*.jpg
+  - name: inr_kaggle
+    format: folders
+    root: raw/inr_kaggle/train
+    mapping: {"10": INR_10, "20": INR_20, "50": INR_50, "100": INR_100,
+              "200": INR_200, "500": INR_500, "2000": INR_2000, "Background": background}
+
+  # Kenyan notes. The Kenyan-Currency-Detector repo ships only a trained model,
+  # so photograph your own (the 2019 series), one folder per note.
+  - name: kes_own
+    format: folders
+    root: raw/kes_photos
+    mapping: {"50": KES_50, "100": KES_100, "200": KES_200, "500": KES_500, "1000": KES_1000}
+
+  # Roboflow "Banha University Egyptian Currency", exported as YOLOv8.
+  # Boxes get cropped. Check the class names in its data.yaml.
+  - name: egp_roboflow
+    format: yolo
+    root: raw/egp_roboflow
+    mapping: {"5": EGP_5, "10": EGP_10, "20": EGP_20, "50": EGP_50,
+              "100": EGP_100, "200": EGP_200}
+
+  # Mendeley UGX dataset: only the GENUINE images go into the denomination
+  # classifier. Counterfeits are used separately by train_authenticity.py.
+  # class_depth: -1 means "use the immediate parent folder as the class".
+  - name: ugx_mendeley
+    format: folders
+    root: raw/ugx_mendeley/genuine
+    class_depth: -1
+    mapping: {"1000": UGX_1000, "2000": UGX_2000, "5000": UGX_5000,
+              "10000": UGX_10000, "20000": UGX_20000, "50000": UGX_50000}
+
+  - name: usd_kaggle
+    format: folders
+    root: raw/usd_kaggle
+    # Placeholder keys: rename them to the folder names in your download.
+    mapping: {"1": USD_1, "2": USD_2, "5": USD_5, "10": USD_10,
+              "20": USD_20, "50": USD_50, "100": USD_100}
+
+  # Background class: hands, tables, wallets, receipts, paper, screens, floors.
+  # Aim for 3-5x the size of one note class. Include receipts and other printed
+  # paper, which are the hardest negatives.
+  - name: background_own
+    format: folders
+    root: raw/background
+    label: background

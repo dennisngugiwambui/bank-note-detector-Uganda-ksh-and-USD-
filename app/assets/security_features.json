@@ -1,0 +1,35 @@
+{
+  "_note": "Manual checks read aloud by the app. Keep them short. Before release, check each one against the issuing central bank's published security features.",
+  "DEFAULT": [
+    "Feel the paper. Real banknote paper is crisp and slightly rough, not smooth or waxy like printer paper.",
+    "Feel for raised print on the portrait and the large numbers.",
+    "Hold the note up to a light. A watermark and a security thread should appear inside the paper, not printed on it.",
+    "Ask a trusted person or a bank to confirm if you are unsure."
+  ],
+  "USD": [
+    "Hold the note to a light. On five dollar notes and above, a faint portrait watermark and a thin security thread appear.",
+    "On ten dollar notes and above, tilting the note changes the colour of the number in the lower right corner.",
+    "On the hundred dollar note, a blue ribbon in the middle shows moving images when tilted.",
+    "Feel the raised ink on the portrait's shoulder."
+  ],
+  "INR": [
+    "Hold the note to a light. You should see a Mahatma Gandhi watermark and a numeral watermark.",
+    "Tilt the note. The security thread colour changes from green to blue on notes of one hundred rupees and above.",
+    "Feel for raised print on the portrait, the emblem and the bleed lines at the edges."
+  ],
+  "KES": [
+    "Hold the note to a light. You should see a lion watermark and the value.",
+    "Look for a security thread that shows as a solid line when held to light.",
+    "Feel for raised print on the main design and the value."
+  ],
+  "UGX": [
+    "Hold the note to a light. You should see a crested crane watermark.",
+    "Look for the security thread embedded in the paper.",
+    "Feel for raised print on the main design."
+  ],
+  "EGP": [
+    "Hold the note to a light. A watermark and security thread should appear inside the paper.",
+    "Feel for raised print on the main design.",
+    "On the newer polymer notes, check that the clear window is present and not printed on."
+  ]
+}

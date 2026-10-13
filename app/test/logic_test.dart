@@ -1,0 +1,110 @@
+import 'dart:typed_data';
+
+import 'package:banknote_identifier/core/currency.dart';
+import 'package:banknote_identifier/ml/currency_classifier.dart';
+import 'package:banknote_identifier/ml/frame.dart';
+import 'package:banknote_identifier/ml/object_detector.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+void main() {
+  group('Note', () {
+    test('parses unified labels and speaks them', () {
+      expect(Note.parse('KES_100')!.spoken, '100 Kenyan shillings');
+      expect(Note.parse('USD_1')!.spoken, '1 US dollar');
+      expect(Note.parse('USD_20_front')!.label, 'USD_20');
+      expect(Note.parse('background'), isNull);
+      expect(Note.parse('INR_abc'), isNull);
+    });
+  });
+
+  group('PredictionSmoother', () {
+    test('announces once after enough agreeing frames', () {
+      final s = PredictionSmoother(threshold: 0.8, window: 7, minVotes: 5);
+      final results = [for (var i = 0; i < 6; i++) s.add(const Prediction('UGX_5000', 0.95))];
+      expect(results.whereType<Note>().length, 1);
+      expect(results[4]!.label, 'UGX_5000'); // 5th vote triggers
+    });
+
+    test('low-confidence frames never announce', () {
+      final s = PredictionSmoother(threshold: 0.8);
+      for (var i = 0; i < 20; i++) {
+        expect(s.add(const Prediction('INR_500', 0.6)), isNull);
+      }
+    });
+
+    test('re-arms after the note leaves the view', () {
+      final s = PredictionSmoother(threshold: 0.8, window: 7, minVotes: 5);
+      Note? last;
+      for (var i = 0; i < 7; i++) {
+        last = s.add(const Prediction('KES_50', 0.9)) ?? last;
+      }
+      expect(last?.label, 'KES_50');
+      for (var i = 0; i < 7; i++) {
+        s.add(const Prediction(backgroundLabel, 0.95));
+      }
+      final again = [for (var i = 0; i < 7; i++) s.add(const Prediction('KES_50', 0.9))];
+      expect(again.whereType<Note>().length, 1);
+    });
+  });
+
+  test('describeScene gives position words', () {
+    final text = describeScene(const [
+      Detection('person', 0.9, 0.4, 0.1, 0.6, 0.9),
+      Detection('chair', 0.8, 0.0, 0.5, 0.2, 0.9),
+      Detection('person', 0.7, 0.7, 0.1, 0.9, 0.5),
+    ]);
+    expect(text, 'person ahead. chair on your left');
+    expect(describeScene(const []), 'Nothing recognized');
+  });
+
+  group('frameToInput', () {
+    // 4x2 BGRA frame: left half red, right half blue.
+    FrameData bgraFrame(int rotation) {
+      final px = Uint8List(4 * 2 * 4);
+      for (var y = 0; y < 2; y++) {
+        for (var x = 0; x < 4; x++) {
+          final i = (y * 4 + x) * 4;
+          if (x < 2) {
+            px[i + 2] = 255; // R
+          } else {
+            px[i] = 255; // B
+          }
+          px[i + 3] = 255;
+        }
+      }
+      return FrameData(4, 2, rotation, true, [px], [16], [4]);
+    }
+
+    test('letterboxes a landscape frame with black bars top and bottom', () {
+      final out = frameToInput(bgraFrame(0), 8);
+      // 4x2 scaled to 8x4, centred: rows 0-1 and 6-7 are padding.
+      expect(out.rgb.sublist(0, 3), [0, 0, 0]);
+      const mid = (3 * 8 + 0) * 3;
+      expect(out.rgb.sublist(mid, mid + 3), [255, 0, 0]); // red on the left
+      const right = (3 * 8 + 7) * 3;
+      expect(out.rgb.sublist(right, right + 3), [0, 0, 255]);
+    });
+
+    test('rotation 90 puts the sensor-left side on top', () {
+      final out = frameToInput(bgraFrame(90), 8);
+      // Upright frame is 2 wide x 4 tall; scaled 4x8, columns 2..5.
+      const top = (0 * 8 + 3) * 3;
+      const bottom = (7 * 8 + 3) * 3;
+      expect(out.rgb.sublist(top, top + 3), [255, 0, 0]);
+      expect(out.rgb.sublist(bottom, bottom + 3), [0, 0, 255]);
+      expect(out.rgb.sublist(0, 3), [0, 0, 0]); // left padding
+    });
+
+    test('YUV420 grey converts to grey', () {
+      const w = 4;
+      const h = 4;
+      final y = Uint8List(w * h)..fillRange(0, w * h, 128);
+      final u = Uint8List(4)..fillRange(0, 4, 128);
+      final v = Uint8List(4)..fillRange(0, 4, 128);
+      final f = FrameData(w, h, 0, false, [y, u, v], [w, 2, 2], [1, 1, 1]);
+      final out = frameToInput(f, 4);
+      expect(out.rgb.every((b) => b == 128), isTrue);
+      expect(out.brightness, closeTo(128, 0.5));
+    });
+  });
+}

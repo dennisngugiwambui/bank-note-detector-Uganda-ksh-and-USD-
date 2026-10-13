@@ -1,0 +1,5 @@
+# Python 3.10-3.12. On Windows, train on CPU, or use WSL2 for GPU.
+tensorflow>=2.16,<2.20
+numpy
+pillow
+pyyaml

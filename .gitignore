@@ -1,0 +1,28 @@
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Training data and runs (large; keep them out of git)
+training/data/
+training/raw/
+training/runs/
+training/sources.yaml
+
+# Android / Gradle (the Kotlin prototype in android/)
+.gradle/
+**/build/
+local.properties
+*.keystore
+*.jks
+key.properties
+
+# IDEs
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
