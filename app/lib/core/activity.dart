@@ -103,6 +103,17 @@ class ActivityStore extends ChangeNotifier {
     _persist();
   }
 
+  void remove(ActivityEvent e) {
+    events.remove(e);
+    _persist();
+  }
+
+  /// Puts back an event removed by mistake (swipe "Undo").
+  void restore(ActivityEvent e, int index) {
+    events.insert(index.clamp(0, events.length), e);
+    _persist();
+  }
+
   void _persist() {
     _prefs.setString('activity', jsonEncode([for (final e in events) e.toJson()]));
     _prefs.setString('totals', jsonEncode(totals));

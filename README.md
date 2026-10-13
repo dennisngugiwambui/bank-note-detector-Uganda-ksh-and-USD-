@@ -1,9 +1,9 @@
-# Banknote Identifier (INR · KES · EGP · UGX · USD)
+# NoteLens: banknote identifier (INR · KES · EGP · UGX · USD)
 
 An offline Flutter app for blind and low-vision users. It has four parts:
 - **Money:** identifies banknote denominations live and speaks them, with a running wallet total.
 - **Check fake:** a guided, spoken check under normal light, backlight and (optionally) UV light, plus manual checks for every currency. This is a screening aid, not proof. See `docs/COUNTERFEIT_DETECTION.md`.
-- **Objects / safety alerts:** describes what is in front of the user ("person ahead, chair on your left") and warns, by voice, vibration and banner, when a person, vehicle or obstacle is in the path.
+- **Objects / safety alerts:** EfficientDet-Lite2 (80 everyday objects with positions) plus an ImageNet classifier (1000 things: shoes, clothes, windows...) describe what is in front of the user ("person ahead, chair on your left") and warns, by voice, vibration and banner, when a person, vehicle or obstacle is in the path.
 - **Activity centre:** every note, verdict and alert, with filters and unread badges.
 
 First launch goes onboarding (spoken) → sign in / create account / continue as guest → home dashboard.

@@ -38,7 +38,7 @@ class BanknoteApp extends StatelessWidget {
       builder: (context, _) {
         final s = scope.settings;
         return MaterialApp(
-          title: 'Banknote',
+          title: 'NoteLens',
           debugShowCheckedModeBanner: false,
           theme: buildTheme(s, Brightness.light),
           darkTheme: buildTheme(s, Brightness.dark),

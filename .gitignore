@@ -26,3 +26,6 @@ key.properties
 # OS
 .DS_Store
 Thumbs.db
+
+# Design preview renders
+app/test/preview/out/

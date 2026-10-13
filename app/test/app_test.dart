@@ -78,6 +78,9 @@ void main() {
     tester.view.physicalSize = const Size(1170, 2532);
     tester.view.devicePixelRatio = 3;
     addTearDown(tester.view.reset);
+    // Looping decorative animations stay still, as for a user with reduce-motion on.
+    tester.platformDispatcher.accessibilityFeaturesTestValue = const FakeAccessibilityFeatures(disableAnimations: true);
+    addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
 
     final settings = await AppSettings.load();
     final auth = await LocalAuthService.load();
@@ -101,17 +104,28 @@ void main() {
 
     expect(find.text('Amina'), findsOneWidget); // greeting
     expect(find.textContaining('Scan a'), findsOneWidget);
-    expect(find.text('Wallet'), findsOneWidget);
+    expect(find.text('Wallet'), findsWidgets); // services tile + nav bar
+    expect(find.text('Learn your notes'), findsOneWidget);
 
-    // Settings tab renders and a toggle persists
+    // Settings tab: open a sub-page, flip a toggle, it persists, come back.
     await tester.tap(find.bySemanticsLabel('Settings'));
     await tester.pumpAndSettle();
-    final list = find.byType(Scrollable).first;
-    await tester.scrollUntilVisible(find.text('High contrast'), 200, scrollable: list);
+    expect(find.text('Money recognition'), findsOneWidget);
+    await tester.tap(find.text('Appearance'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('High contrast'));
     await tester.pumpAndSettle();
     expect(settings.highContrast, isTrue);
-    await tester.scrollUntilVisible(find.text('Money recognition'), 300, scrollable: list);
-    expect(find.text('Money recognition'), findsOneWidget);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    expect(find.textContaining('High contrast'), findsOneWidget); // summary row updated
+
+    // Wallet and Activity tabs render
+    await tester.tap(find.bySemanticsLabel('Wallet'));
+    await tester.pumpAndSettle();
+    expect(find.text('Nothing counted yet'), findsOneWidget);
+    await tester.tap(find.bySemanticsLabel('Activity'));
+    await tester.pumpAndSettle();
+    expect(find.text('All caught up'), findsOneWidget);
   });
 }

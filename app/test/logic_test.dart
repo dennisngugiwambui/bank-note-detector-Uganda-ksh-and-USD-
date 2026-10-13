@@ -1,9 +1,11 @@
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:banknote_identifier/core/currency.dart';
 import 'package:banknote_identifier/ml/currency_classifier.dart';
 import 'package:banknote_identifier/ml/frame.dart';
 import 'package:banknote_identifier/ml/object_detector.dart';
+import 'package:banknote_identifier/ml/scene_classifier.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -105,6 +107,36 @@ void main() {
       final out = frameToInput(f, 4);
       expect(out.rgb.every((b) => b == 128), isTrue);
       expect(out.brightness, closeTo(128, 0.5));
+    });
+  });
+
+  group('objects mode models', () {
+    test('detector output layout: post-processed accepted, raw anchors rejected', () {
+      // EfficientDet-Lite2 with TFLite_Detection_PostProcess (bundled)
+      expect(ObjectDetector.hasPostProcessOutputs([[1, 25, 4], [1, 25], [1, 25], [1]]), isTrue);
+      // MediaPipe build: raw anchors, the cause of "Nothing recognized" on every frame
+      expect(ObjectDetector.hasPostProcessOutputs([[1, 19206, 90], [1, 19206, 4]]), isFalse);
+    });
+
+    test('bundled detector labels are COCO and every scene group label exists', () {
+      final det = File('assets/detector/labels.txt').readAsLinesSync();
+      expect(det.first.trim(), 'person');
+      expect(det, containsAll(['laptop', 'keyboard', 'bottle', 'chair', 'car']));
+      final lines = File('assets/scene/labels.txt').readAsLinesSync().where((l) => l.trim().isNotEmpty).toList();
+      expect(lines.length, 1000); // one per model output ("crane" and "maillot" appear twice)
+      final imagenet = lines.map((l) => l.trim()).toSet();
+      final missing = imagenetGroups.keys.where((k) => !imagenet.contains(k)).toList();
+      expect(missing, isEmpty);
+      expect(spokenName('space bar'), 'keyboard');
+      expect(spokenName('running shoe'), 'shoes');
+    });
+
+    test('scene description uses the classifier when the detector finds nothing', () {
+      expect(describeScene(const [], sceneGuess: 'shoes'), 'Looks like shoes');
+      expect(describeScene(const []), nothingRecognized);
+      final laptop = [const Detection('laptop', 0.8, 0.3, 0.3, 0.7, 0.7)];
+      expect(describeScene(laptop, sceneGuess: 'laptop'), 'laptop ahead');
+      expect(describeScene(laptop, sceneGuess: 'desk'), 'laptop ahead. looks like desk');
     });
   });
 }

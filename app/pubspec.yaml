@@ -27,14 +27,38 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  fonts:
+    - family: Inter # SIL Open Font License, assets/fonts/Inter-LICENSE.txt
+      fonts:
+        - asset: assets/fonts/Inter-Regular.ttf
+        - asset: assets/fonts/Inter-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Inter-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Inter-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/Inter-ExtraBold.ttf
+          weight: 800
+    - family: PhosphorRegular # MIT, assets/fonts/Phosphor-LICENSE.txt
+      fonts:
+        - asset: assets/fonts/Phosphor-Regular.ttf
+    - family: PhosphorFill
+      fonts:
+        - asset: assets/fonts/Phosphor-Fill.ttf
+    - family: PhosphorBold
+      fonts:
+        - asset: assets/fonts/Phosphor-Bold.ttf
   # Every listed folder must exist. To add an authenticity model for another
   # currency, create assets/authenticity/<ISO>/ and list it here. The app
   # finds it at runtime through the AssetManifest, with no code change.
   assets:
     - assets/currency/
     - assets/detector/
+    - assets/scene/
     - assets/authenticity/UGX/
     - assets/security_features.json
+    - assets/branding/logo.png
+    - assets/branding/wordmark.png
 
 # Icon and splash: art comes from tool/make_brand_assets.py. After changing it run
 #   dart run flutter_launcher_icons && dart run flutter_native_splash:create
@@ -43,15 +67,19 @@ flutter_launcher_icons:
   ios: true
   remove_alpha_ios: true
   image_path: assets/branding/icon.png
-  adaptive_icon_background: "#0B0C0F"
+  adaptive_icon_background: assets/branding/adaptive_background.png
   adaptive_icon_foreground: assets/branding/icon_foreground.png
-  adaptive_icon_monochrome: assets/branding/icon_foreground.png
+  adaptive_icon_monochrome: assets/branding/icon_monochrome.png
   min_sdk_android: 26
 
 flutter_native_splash:
-  color: "#0B0C0F"
+  color: "#050807"
   image: assets/branding/splash.png
+  branding: assets/branding/wordmark.png
+  branding_mode: bottom
   android_12:
-    color: "#0B0C0F"
+    color: "#050807"
     image: assets/branding/splash.png
+    icon_background_color: "#050807"
+    branding: assets/branding/wordmark.png
   fullscreen: false

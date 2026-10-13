@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import 'tflite_model.dart';
@@ -14,8 +15,9 @@ class Detection {
 
 /// General object detection ("what is in front of me"), for COCO models
 /// with the TFLite_Detection_PostProcess op: the SSD MobileNet `detect.tflite`
-/// from Blind-People-Smart-AID / Braillo, or EfficientDet-Lite0 (recommended,
-/// more accurate).
+/// from Blind-People-Smart-AID / Braillo, or EfficientDet-Lite0/1/2 (bundled:
+/// Lite2). Models without that op (MediaPipe builds, 19206 raw anchors) are
+/// rejected at load time, because they would silently detect nothing.
 ///
 /// Those models order their four outputs differently, so the roles are
 /// worked out from shapes and values rather than hard-coded.
@@ -34,6 +36,11 @@ class ObjectDetector {
   static Future<ObjectDetector?> load() async {
     final model = await TfliteModel.load(modelAsset, normalizeFloatInput: true);
     if (model == null) return null;
+    if (!hasPostProcessOutputs(model.outputShapes)) {
+      debugPrint('$modelAsset has no TFLite_Detection_PostProcess outputs: ${model.outputShapes}');
+      model.close();
+      return null;
+    }
     final labels = (await rootBundle.loadString(labelsAsset))
         .split('\n')
         .map((l) => l.trim())
@@ -43,7 +50,13 @@ class ObjectDetector {
     return ObjectDetector._(model, labels, labels.isNotEmpty && labels.first == '???' ? 1 : 0);
   }
 
-  Future<List<Detection>> detect(Uint8List rgb, {double minScore = 0.5}) async {
+  /// True for the 4-output layout: boxes [1,N,4], classes [1,N], scores [1,N], count [1].
+  static bool hasPostProcessOutputs(List<List<int>> shapes) =>
+      shapes.length == 4 &&
+      shapes.where((s) => s.length == 3 && s.last == 4).length == 1 &&
+      shapes.where((s) => s.length == 1 || (s.length == 2 && s.last == 1)).length == 1;
+
+  Future<List<Detection>> detect(Uint8List rgb, {double minScore = 0.4}) async {
     final outs = await _model.run(rgb);
     final shapes = _model.outputShapes;
 
@@ -85,8 +98,10 @@ class ObjectDetector {
 
 /// Builds a short spoken scene description, such as "person ahead, close.
 /// Chair on your left."
-String describeScene(List<Detection> detections, {int maxItems = 3}) {
-  if (detections.isEmpty) return 'Nothing recognized';
+/// [sceneGuess] is the ImageNet classifier's answer, for things COCO does not
+/// know (shoes, clothes, windows...).
+String describeScene(List<Detection> detections, {int maxItems = 3, String? sceneGuess}) {
+  if (detections.isEmpty) return sceneGuess == null ? nothingRecognized : 'Looks like $sceneGuess';
   final seen = <String>{};
   final parts = <String>[];
   for (final d in detections) {
@@ -95,5 +110,10 @@ String describeScene(List<Detection> detections, {int maxItems = 3}) {
     parts.add('${d.label} $where${d.area > 0.35 ? ', close' : ''}');
     if (parts.length == maxItems) break;
   }
+  if (sceneGuess != null && parts.length < maxItems && !seen.contains(sceneGuess)) {
+    parts.add('looks like $sceneGuess');
+  }
   return parts.join('. ');
 }
+
+const nothingRecognized = 'Nothing recognized';

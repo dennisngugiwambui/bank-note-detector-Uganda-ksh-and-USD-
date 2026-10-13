@@ -11,6 +11,7 @@ import 'ml/authenticity_checker.dart';
 import 'ml/currency_classifier.dart';
 import 'ml/frame.dart';
 import 'ml/object_detector.dart';
+import 'ml/scene_classifier.dart';
 import 'services/announcer.dart';
 
 enum ScanMode { currency, scene }
@@ -44,6 +45,7 @@ class ScanController extends ChangeNotifier {
   CameraController? camera;
   CurrencyClassifier? _classifier;
   ObjectDetector? _detector;
+  SceneClassifier? _scene;
   AuthenticityChecker? authenticity;
   bool modelsLoaded = false;
 
@@ -53,6 +55,8 @@ class ScanController extends ChangeNotifier {
   Note? lastNote;
   double lastConfidence = 0;
   List<Detection> detections = const [];
+  String? sceneGuess; // ImageNet fallback, e.g. "shoes"
+  double sceneGuessScore = 0;
   bool torchOn = false;
 
   // Authenticity flow state, shown by the UI
@@ -73,6 +77,7 @@ class ScanController extends ChangeNotifier {
 
   bool get hasCurrencyModel => _classifier != null;
   bool get hasDetector => _detector != null;
+  bool get hasSceneClassifier => _scene != null;
   bool get authRunning => authPhase != AuthPhase.idle && authPhase != AuthPhase.done;
 
   Future<void> loadModels() async {
@@ -82,10 +87,12 @@ class ScanController extends ChangeNotifier {
       CurrencyClassifier.load(),
       ObjectDetector.load(),
       AuthenticityChecker.load(),
+      SceneClassifier.load(),
     ]);
     _classifier = loaded[0] as CurrencyClassifier?;
     _detector = loaded[1] as ObjectDetector?;
     authenticity = loaded[2] as AuthenticityChecker;
+    _scene = loaded[3] as SceneClassifier?;
     modelsLoaded = true;
     notifyListeners();
   }
@@ -206,9 +213,18 @@ class ScanController extends ChangeNotifier {
     final input = await compute(_prepStretch, (frame, detector.inputWidth));
     detections = await detector.detect(input.rgb);
     if (settings.obstacleAlerts) _checkObstacles(detections);
-    final text = describeScene(detections);
+    final scene = _scene;
+    if (scene != null) {
+      final small = await compute(_prepStretch, (frame, scene.inputSize));
+      final guess = await scene.classify(small.rgb);
+      sceneGuess = guess?.$1;
+      sceneGuessScore = guess?.$2 ?? 0;
+    }
+    final text = describeScene(detections, sceneGuess: sceneGuess);
     final now = DateTime.now();
-    if (text != _lastScene || now.difference(_lastSceneAt) > const Duration(seconds: 6)) {
+    final changed = text != _lastScene;
+    final repeatDue = now.difference(_lastSceneAt) > const Duration(seconds: 6);
+    if (changed || (repeatDue && text != nothingRecognized)) {
       _lastScene = text;
       _lastSceneAt = now;
       _setStatus(text, speak: true);
@@ -249,6 +265,7 @@ class ScanController extends ChangeNotifier {
     mode = m;
     smoother.reset();
     detections = const [];
+    sceneGuess = null;
     _lastScene = '';
     announcer.buzz(Buzz.light);
     _setStatus(m == ScanMode.currency ? 'Money mode. Point at a banknote.' : 'Objects mode. Describing surroundings.',
@@ -408,6 +425,7 @@ class ScanController extends ChangeNotifier {
     stopCamera();
     _classifier?.close();
     _detector?.close();
+    _scene?.close();
     authenticity?.close();
     announcer.dispose();
     super.dispose();

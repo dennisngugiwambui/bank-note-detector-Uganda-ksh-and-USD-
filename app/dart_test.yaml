@@ -1,0 +1,5 @@
+tags:
+  preview:
+    # Renders screens to PNG for design review. Run with:
+    #   flutter test test/preview --run-skipped --update-goldens
+    skip: "design previews; run explicitly"
