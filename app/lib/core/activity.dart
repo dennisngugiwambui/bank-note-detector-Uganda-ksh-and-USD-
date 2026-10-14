@@ -52,7 +52,7 @@ class ActivityStore extends ChangeNotifier {
   final SharedPreferences _prefs;
   final List<ActivityEvent> events = [];
   final _alerts = StreamController<ActivityEvent>.broadcast();
-  final Map<String, int> totals = {};
+  final Map<String, num> totals = {};
 
   ActivityStore._(this._prefs);
 
@@ -66,7 +66,7 @@ class ActivityStore extends ChangeNotifier {
     }
     final t = s._prefs.getString('totals');
     if (t != null) {
-      (jsonDecode(t) as Map<String, dynamic>).forEach((k, v) => s.totals[k] = v as int);
+      (jsonDecode(t) as Map<String, dynamic>).forEach((k, v) => s.totals[k] = v as num);
     }
     return s;
   }
@@ -81,7 +81,7 @@ class ActivityStore extends ChangeNotifier {
     _persist();
   }
 
-  void addToTotal(String currency, int value) {
+  void addToTotal(String currency, num value) {
     totals[currency] = (totals[currency] ?? 0) + value;
     _persist();
   }

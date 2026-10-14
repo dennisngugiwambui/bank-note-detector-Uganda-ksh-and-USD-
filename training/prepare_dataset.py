@@ -6,6 +6,10 @@ map onto unified labels (``KES_100``, ``USD_20``, ``background``, ...).
 Supported layouts:
   folders  root/<class>/.../*.jpg            (Kaggle and Teachable Machine style)
   yolo     Roboflow/YOLO export with data.yaml; every box is cropped into its own sample
+  coco     COCO json (_annotations.coco.json next to the images); boxes are cropped
+
+Every source should carry ``license`` and ``commercial_ok``. They are written to
+<out>/licenses.csv so a release build can be checked for non-commercial data.
 
 The reference repos share two problems that this script fixes:
   * Near-duplicate leakage. Kaggle note sets hold many augmented copies of one
@@ -110,6 +114,50 @@ def collect_yolo(src: dict) -> list[Sample]:
     if unmapped:
         print(f"  [{src['name']}] skipped unmapped classes: {dict(unmapped)}")
     return samples
+
+
+def collect_coco(src: dict) -> list[Sample]:
+    """Every COCO json under root; image files sit next to their json."""
+    import json
+    root = Path(src["root"])
+    mapping: dict[str, str] = {str(k): v for k, v in (src.get("mapping") or {}).items()}
+    min_side = float(src.get("min_box_side", 0.05))
+    samples, unmapped = [], Counter()
+    for ann_file in sorted(root.rglob("*.json")):
+        d = json.loads(ann_file.read_text(encoding="utf-8"))
+        cats = {c["id"]: c["name"] for c in d.get("categories", [])}
+        images = {i["id"]: i for i in d.get("images", [])}
+        for a in d.get("annotations", []):
+            name = cats.get(a["category_id"], "")
+            label = mapping.get(name)
+            if label is None:
+                unmapped[name] += 1
+                continue
+            im = images[a["image_id"]]
+            W, H = im["width"], im["height"]
+            x, y, w, h = a["bbox"]
+            if min(w / W, h / H) < min_side:
+                continue
+            path = ann_file.parent / im["file_name"]
+            if path.exists():
+                samples.append(Sample(src["name"], label, path, ((x + w / 2) / W, (y + h / 2) / H, w / W, h / H)))
+    if unmapped:
+        print(f"  [{src['name']}] skipped unmapped classes: {dict(unmapped)}")
+    return samples
+
+
+def cap_per_label(samples: list[Sample], cap: int, seed: int) -> list[Sample]:
+    if cap <= 0:
+        return samples
+    rng = random.Random(seed)
+    by = defaultdict(list)
+    for s in samples:
+        by[s.label].append(s)
+    out = []
+    for items in by.values():
+        rng.shuffle(items)
+        out += items[:cap]
+    return out
 
 
 # ----------------------------------------------------------------------------
@@ -254,13 +302,15 @@ def main() -> None:
     ap.add_argument("--dup-distance", type=int, default=3, help="dHash Hamming distance treated as duplicate (max 3)")
     ap.add_argument("--composites-per-class", type=int, default=0, help="synthetic train images per note class")
     ap.add_argument("--background-dir", default=None, help="extra background photos for composites")
+    ap.add_argument("--max-per-source-label", type=int, default=0,
+                    help="cap samples per (source, label) before splitting; 0 = no cap")
     args = ap.parse_args()
 
     cfg = yaml.safe_load(Path(args.sources).read_text(encoding="utf-8"))
     samples: list[Sample] = []
     for src in cfg["sources"]:
-        collect = collect_yolo if src.get("format") == "yolo" else collect_folders
-        found = collect(src)
+        collect = {"yolo": collect_yolo, "coco": collect_coco}.get(src.get("format"), collect_folders)
+        found = cap_per_label(collect(src), int(src.get("max_per_label", args.max_per_source_label)), args.seed)
         print(f"{src['name']}: {len(found)} samples")
         samples += found
 
@@ -299,6 +349,17 @@ def main() -> None:
 
     split_by_group(samples, args.val, args.test, args.seed)
 
+    with open(out / "licenses.csv", "w", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["source", "license", "commercial_ok", "url", "samples"])
+        counts = Counter(s.source for s in samples)
+        for src in cfg["sources"]:
+            w.writerow([src["name"], src.get("license", "UNKNOWN"), src.get("commercial_ok", False),
+                        src.get("url", ""), counts.get(src["name"], 0)])
+    blocked = [src["name"] for src in cfg["sources"] if not src.get("commercial_ok", False)]
+    if blocked:
+        print(f"NOTE: not cleared for a paid release (non-commercial or unknown license): {blocked}")
+
     counters = defaultdict(Counter)
     with open(out / "manifest.csv", "w", newline="") as f:
         w = csv.writer(f)
@@ -320,7 +381,7 @@ def main() -> None:
     for label in labels:
         row = [counters[sp][label] for sp in ("train", "val", "test")]
         flag = "  <- under 150 train images" if row[0] < 150 else ""
-        print(f"{label:<12}{row[0]:>8}{row[1]:>8}{row[2]:>8}{flag}")
+        print(f"{label:<16}{row[0]:>8}{row[1]:>8}{row[2]:>8}{flag}")
     if BACKGROUND not in labels:
         print("\nWARNING: no 'background' class. The model will name a note even when none is in view.")
 

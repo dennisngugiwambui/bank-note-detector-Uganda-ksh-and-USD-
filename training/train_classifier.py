@@ -37,7 +37,7 @@ def build_model(num_classes: int, img: int, alpha: float, dropout: float):
                                           include_top=False, weights="imagenet")
     base.trainable = False
     x = base(x, training=False)  # BN layers stay in inference mode, even while fine-tuning
-    x = keras.layers.GlobalAveragePooling2D()(x)
+    x = keras.layers.GlobalAveragePooling2D(name="embedding")(x)  # also exported, for notes taught on the phone
     x = keras.layers.Dropout(dropout)(x)
     logits = keras.layers.Dense(num_classes, name="logits")(x)
     return keras.Model(inputs, logits, name="banknote_classifier"), base

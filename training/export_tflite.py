@@ -3,6 +3,11 @@
 The calibrated softmax, softmax(logits / T), is built into the graph, so
 the app reads ready-to-use probabilities.
 
+A second output, "features", is the pooled backbone embedding with the mean
+training embedding subtracted and L2-normalised. The app compares it by cosine
+similarity with notes the user taught on the phone ("Teach a note"), which
+covers notes and series the training data lacks.
+
 Variants:
   int8   full-integer, uint8 input. Smallest and fastest on CPU (XNNPACK). Default for the app.
   fp16   float16 weights, float32 input. Use this one with the GPU delegate.
@@ -23,16 +28,30 @@ import tempfile
 from pathlib import Path
 
 import keras
+import numpy as np
 import tensorflow as tf
 
 from data import list_split, load_letterboxed
 
 
-def probability_model(model, temperature: float = 1.0):
-    """Wrap a logits model so it outputs softmax(logits / T)."""
+def probability_model(model, temperature: float = 1.0, embedding_mean=None):
+    """Wrap a logits model so it outputs softmax(logits / T), and with
+    [embedding_mean] also the centred, normalised embedding."""
     x = keras.layers.Rescaling(1.0 / temperature, name="temperature")(model.output)
     probs = keras.layers.Softmax(name="probabilities")(x)
-    return keras.Model(model.input, probs)
+    if embedding_mean is None:
+        return keras.Model(model.input, probs)
+    emb = model.get_layer("embedding").output
+    mean = keras.ops.convert_to_tensor(np.asarray(embedding_mean, "float32"))
+    feats = keras.layers.Lambda(lambda e: keras.ops.normalize(e - mean, axis=-1), name="features")(emb)
+    return keras.Model(model.input, [probs, feats])
+
+
+def embedding_mean(model, paths, img: int, count: int = 600):
+    emb_model = keras.Model(model.input, model.get_layer("embedding").output)
+    xs = [load_letterboxed(tf.constant(p), img) for p in paths[:count]]
+    out = [emb_model(tf.stack(xs[i:i + 32]), training=False).numpy() for i in range(0, len(xs), 32)]
+    return np.concatenate(out).mean(axis=0)
 
 
 def convert(prob_model, mode: str, representative) -> bytes:
@@ -64,17 +83,18 @@ def main() -> None:
     ap.add_argument("--modes", nargs="+", default=["int8", "fp16"])
     ap.add_argument("--rep-count", type=int, default=400)
     ap.add_argument("--android-assets", default=None, help="copy the int8 model and labels here")
+    ap.add_argument("--no-features", action="store_true", help="export probabilities only")
     args = ap.parse_args()
 
     run = Path(args.run)
     meta = json.loads((run / "meta.json").read_text(encoding="utf-8"))
     img, temperature = meta["img_size"], meta.get("temperature", 1.0)
     model = keras.models.load_model(run / "model.keras")
-    prob_model = probability_model(model, temperature)
-
     paths, _, _ = list_split(Path(args.data), "train", meta["labels"])
     random.Random(0).shuffle(paths)
     rep = paths[: args.rep_count]
+    mean = None if args.no_features else embedding_mean(model, paths, img)
+    prob_model = probability_model(model, temperature, mean)
 
     def representative():
         for p in rep:
