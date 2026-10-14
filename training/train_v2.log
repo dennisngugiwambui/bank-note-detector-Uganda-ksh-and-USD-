@@ -2,3 +2,23 @@ C:\Users\Softclans\Desktop\bank note detection\training\.venv\Lib\site-packages\
   self.data_adapter = data_adapters.get_data_adapter(
 46 classes, train=22894 val=1453 test=1390
 Epoch 1/5
+715/715 - 623s - 871ms/step - accuracy: 0.3848 - loss: 2.4654 - val_accuracy: 0.6222 - val_loss: 1.7179
+Epoch 2/5
+715/715 - 809s - 1s/step - accuracy: 0.5184 - loss: 2.0765 - val_accuracy: 0.7364 - val_loss: 1.5172
+Epoch 3/5
+715/715 - 790s - 1s/step - accuracy: 0.5469 - loss: 1.9972 - val_accuracy: 0.7261 - val_loss: 1.5266
+Epoch 4/5
+715/715 - 842s - 1s/step - accuracy: 0.5613 - loss: 1.9646 - val_accuracy: 0.7722 - val_loss: 1.4845
+Epoch 5/5
+715/715 - 1323s - 2s/step - accuracy: 0.5659 - loss: 1.9503 - val_accuracy: 0.7447 - val_loss: 1.5243
+Epoch 1/12
+715/715 - 1066s - 1s/step - accuracy: 0.6817 - loss: 1.6296 - val_accuracy: 0.7853 - val_loss: 1.3693
+Epoch 2/12
+C:\Users\Softclans\Desktop\bank note detection\training\.venv\Lib\site-packages\keras\src\saving\saving_lib.py:869: UserWarning: Skipping variable loading for optimizer 'adam', because it has 1 variables whereas the saved optimizer has 39 variables. 
+  saveable.load_own_variables(store)
+C:\Users\Softclans\Desktop\bank note detection\training\.venv\Lib\site-packages\keras\src\trainers\epoch_iterator.py:74: UserWarning: `shuffle=True` was passed, but will be ignored since the data `x` was provided as a tf.data.Dataset. The Dataset is expected to already be shuffled (via `.shuffle(buffer_size)`).
+  self.data_adapter = data_adapters.get_data_adapter(
+Resuming: head epochs done 5/5, fine-tune epochs done 1/12, best val accuracy 0.7853
+46 classes, train=22894 val=1453 test=1390
+Head phase already done.
+Epoch 2/12

@@ -13,6 +13,11 @@ Changes from the reference repos (see docs/REPO_ANALYSIS.md):
 
 Usage:
   python train_classifier.py --data data/unified --out runs/v1
+
+Resumable: after every epoch the weights and progress are saved to <out>
+(state.json, *_last.weights.h5). If training stops (power cut, laptop shut
+down, out of memory), run the same command again and it continues from the
+last finished epoch. Use --restart to start over.
 """
 
 from __future__ import annotations
@@ -71,6 +76,32 @@ def predict_logits(model, ds) -> tuple[np.ndarray, np.ndarray]:
     return np.concatenate(xs), np.concatenate(ys)
 
 
+class Progress(keras.callbacks.Callback):
+    """Saves weights and progress after every epoch so a run can be resumed."""
+
+    def __init__(self, out: Path, state: dict, phase: str):
+        super().__init__()
+        self.out, self.state, self.phase = out, state, phase
+
+    def on_epoch_end(self, epoch, logs=None):
+        self.model.save_weights(self.out / f"{self.phase}_last.weights.h5")
+        val = float((logs or {}).get("val_accuracy", 0.0))
+        self.state[f"{self.phase}_epochs_done"] = epoch + 1
+        self.state["best_val"] = max(self.state.get("best_val", 0.0), val)
+        save_state(self.out, self.state)
+
+
+def load_state(out: Path) -> dict:
+    f = out / "state.json"
+    return json.loads(f.read_text(encoding="utf-8")) if f.exists() else {}
+
+
+def save_state(out: Path, state: dict) -> None:
+    tmp = out / "state.json.tmp"
+    tmp.write_text(json.dumps(state, indent=2), encoding="utf-8")
+    tmp.replace(out / "state.json")  # atomic: a power cut never leaves half a file
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--data", default="data/unified")
@@ -85,10 +116,16 @@ def main() -> None:
     ap.add_argument("--lr-ft", type=float, default=2e-5)
     ap.add_argument("--dropout", type=float, default=0.3)
     ap.add_argument("--label-smoothing", type=float, default=0.1)
+    ap.add_argument("--restart", action="store_true", help="ignore saved progress and start over")
     args = ap.parse_args()
 
     root, out = Path(args.data), Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
+    state = {} if args.restart else load_state(out)
+    if state:
+        print(f"Resuming: head epochs done {state.get('head_epochs_done', 0)}/{args.epochs_head}, "
+              f"fine-tune epochs done {state.get('ft_epochs_done', 0)}/{args.epochs_ft}, "
+              f"best val accuracy {state.get('best_val', 0):.4f}")
     tr_p, tr_y, labels = list_split(root, "train")
     va_p, va_y, _ = list_split(root, "val", labels)
     te_p, te_y, _ = list_split(root, "test", labels)
@@ -105,18 +142,29 @@ def main() -> None:
     loss = keras.losses.CategoricalCrossentropy(from_logits=True, label_smoothing=args.label_smoothing)
     weights = class_weights(tr_y, n)
     ckpt = str(out / "best.keras")
+    steps_per_epoch = max(1, len(tr_p) // args.batch)
 
     def callbacks(phase):
         return [
-            keras.callbacks.ModelCheckpoint(ckpt, monitor="val_accuracy", save_best_only=True),
+            # The best score so far survives a restart, so a resumed run
+            # never overwrites best.keras with a worse model.
+            keras.callbacks.ModelCheckpoint(ckpt, monitor="val_accuracy", save_best_only=True,
+                                            initial_value_threshold=state.get("best_val")),
             keras.callbacks.EarlyStopping(monitor="val_accuracy", patience=6, restore_best_weights=True),
-            keras.callbacks.CSVLogger(str(out / f"log_{phase}.csv")),
+            keras.callbacks.CSVLogger(str(out / f"log_{phase}.csv"), append=True),
+            Progress(out, state, phase),
         ]
 
     # Phase 1: head only
-    model.compile(keras.optimizers.Adam(args.lr_head), loss, metrics=["accuracy"])
-    model.fit(train_ds, validation_data=val_ds, epochs=args.epochs_head,
-              class_weight=weights, callbacks=callbacks("head"), verbose=2)
+    head_done = state.get("head_epochs_done", 0)
+    if head_done < args.epochs_head:
+        if head_done and (out / "head_last.weights.h5").exists():
+            model.load_weights(out / "head_last.weights.h5")
+        model.compile(keras.optimizers.Adam(args.lr_head), loss, metrics=["accuracy"])
+        model.fit(train_ds, validation_data=val_ds, epochs=args.epochs_head, initial_epoch=head_done,
+                  class_weight=weights, callbacks=callbacks("head"), verbose=2)
+    else:
+        print("Head phase already done.")
 
     # Phase 2: fine-tune the top of the backbone. BatchNorm stays frozen.
     base.trainable = True
@@ -125,11 +173,25 @@ def main() -> None:
     for layer in base.layers:
         if isinstance(layer, keras.layers.BatchNormalization):
             layer.trainable = False
-    steps = max(1, len(tr_p) // args.batch) * args.epochs_ft
+    steps = steps_per_epoch * args.epochs_ft
     lr = keras.optimizers.schedules.CosineDecay(args.lr_ft, decay_steps=steps, alpha=0.05)
-    model.compile(keras.optimizers.Adam(lr), loss, metrics=["accuracy"])
-    model.fit(train_ds, validation_data=val_ds, epochs=args.epochs_ft,
-              class_weight=weights, callbacks=callbacks("finetune"), verbose=2)
+    optimizer = keras.optimizers.Adam(lr)
+    model.compile(optimizer, loss, metrics=["accuracy"])
+    ft_done = state.get("ft_epochs_done", 0)
+    if ft_done and (out / "ft_last.weights.h5").exists():
+        model.load_weights(out / "ft_last.weights.h5")
+    elif head_done >= args.epochs_head and (out / "head_last.weights.h5").exists():
+        model.load_weights(out / "head_last.weights.h5")
+    if ft_done:
+        # Continue the learning-rate schedule where it stopped.
+        optimizer.build(model.trainable_variables)
+        optimizer.iterations.assign(ft_done * steps_per_epoch)
+    if ft_done < args.epochs_ft:
+        model.fit(train_ds, validation_data=val_ds, epochs=args.epochs_ft, initial_epoch=ft_done,
+                  class_weight=weights, callbacks=callbacks("ft"), verbose=2)
+    # Use the best epoch, which may be from before a restart.
+    if Path(ckpt).exists():
+        model.load_weights(ckpt)
 
     # Calibrate on val, report on test
     val_logits, val_true = predict_logits(model, val_ds)
