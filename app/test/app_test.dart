@@ -6,6 +6,8 @@ import 'package:banknote_identifier/core/settings.dart';
 import 'package:banknote_identifier/main.dart';
 import 'package:banknote_identifier/ml/authenticity_checker.dart';
 import 'package:banknote_identifier/scan_controller.dart';
+import 'package:banknote_identifier/services/announcer.dart';
+import 'package:banknote_identifier/ui/voice_guide.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -83,12 +85,26 @@ void main() {
     addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
 
     final settings = await AppSettings.load();
+    expect(settings.voiceGuide, isTrue); // on by default for blind users
+    settings.update((x) => x.voiceGuide = false); // this test taps like a sighted helper
     final auth = await LocalAuthService.load();
     final activity = await ActivityStore.load();
     final scan = ScanController(settings: settings, activity: activity);
     await tester.pumpWidget(AppScope(settings: settings, auth: auth, activity: activity, scan: scan, child: const BanknoteApp()));
     await tester.pumpAndSettle();
 
+    // Setup: language, voice, speed, then the story pages.
+    expect(find.text('Kiswahili'), findsOneWidget);
+    await tester.tap(find.text('English'));
+    await tester.pumpAndSettle();
+    expect(settings.language, 'en');
+    await tester.tap(find.text('Man'));
+    await tester.pumpAndSettle();
+    expect(settings.voiceStyle, VoiceStyle.man);
+    await tester.tap(find.text('Continue'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Continue'));
+    await tester.pumpAndSettle();
     expect(find.textContaining('Know every'), findsOneWidget);
     await tester.tap(find.text('Skip'));
     await tester.pumpAndSettle();
@@ -103,9 +119,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Amina'), findsOneWidget); // greeting
-    expect(find.textContaining('Scan a'), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp('Double tap to start scanning')), findsOneWidget);
+    expect(find.text('Voice command'), findsOneWidget);
     expect(find.text('Wallet'), findsWidgets); // services tile + nav bar
-    expect(find.text('Learn your notes'), findsOneWidget);
+    expect(find.text('Learn your money'), findsOneWidget);
 
     // Settings tab: open a sub-page, flip a toggle, it persists, come back.
     await tester.tap(find.bySemanticsLabel('Settings'));
@@ -127,5 +144,47 @@ void main() {
     await tester.tap(find.bySemanticsLabel('Activity'));
     await tester.pumpAndSettle();
     expect(find.text('All caught up'), findsOneWidget);
+  });
+
+  testWidgets('voice guide: touch reads, double tap activates', (tester) async {
+    final settings = await AppSettings.load();
+    final announcer = Announcer(settings);
+    var pressed = 0;
+    await tester.pumpWidget(MaterialApp(
+      home: VoiceGuide(
+        enabled: true,
+        announcer: announcer,
+        strings: () => settings.strings,
+        child: Scaffold(
+          body: Center(
+            child: ElevatedButton(onPressed: () => pressed++, child: const Text('Pay')),
+          ),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    final button = find.text('Pay');
+
+    await tester.tap(button, warnIfMissed: false); // the guide overlay takes the touch
+    await tester.pumpAndSettle(const Duration(milliseconds: 400));
+    expect(pressed, 0); // one touch only reads it
+
+    await tester.tap(button, warnIfMissed: false); // the guide overlay takes the touch
+    await tester.pump(const Duration(milliseconds: 80));
+    await tester.tap(button, warnIfMissed: false); // the guide overlay takes the touch
+    await tester.pumpAndSettle(const Duration(milliseconds: 400));
+    expect(pressed, 1);
+
+    // Turned off, taps go straight through.
+    await tester.pumpWidget(MaterialApp(
+      home: VoiceGuide(
+        enabled: false,
+        announcer: announcer,
+        strings: () => settings.strings,
+        child: Scaffold(body: Center(child: ElevatedButton(onPressed: () => pressed++, child: const Text('Pay')))),
+      ),
+    ));
+    await tester.tap(button);
+    expect(pressed, 2);
   });
 }

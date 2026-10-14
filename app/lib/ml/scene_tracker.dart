@@ -103,7 +103,7 @@ class SceneTracker {
         if (o.label != d.label || matched.contains(o)) continue;
         final iou = _iou(o.box, d);
         final dist = math.sqrt(math.pow(o.box.centerX - d.centerX, 2) + math.pow(_cy(o.box) - _cy(d), 2));
-        final s = iou > 0.2 ? iou : (dist < 0.12 ? 0.2 - dist : 0);
+        final double s = iou > 0.2 ? iou : (dist < 0.12 ? 0.2 - dist : 0.0);
         if (s > bestScore) {
           best = o;
           bestScore = s;

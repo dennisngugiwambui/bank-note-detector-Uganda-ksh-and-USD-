@@ -1,0 +1,4 @@
+C:\Users\Softclans\Desktop\bank note detection\training\.venv\Lib\site-packages\keras\src\trainers\epoch_iterator.py:74: UserWarning: `shuffle=True` was passed, but will be ignored since the data `x` was provided as a tf.data.Dataset. The Dataset is expected to already be shuffled (via `.shuffle(buffer_size)`).
+  self.data_adapter = data_adapters.get_data_adapter(
+46 classes, train=22894 val=1453 test=1390
+Epoch 1/5

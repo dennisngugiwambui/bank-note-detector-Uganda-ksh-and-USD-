@@ -4,8 +4,10 @@ import 'package:flutter/material.dart';
 import '../core/app_scope.dart';
 import '../core/currency.dart';
 import '../ml/authenticity_checker.dart';
-import '../ml/object_detector.dart';
+import '../ml/scene_speech.dart';
+import '../ml/scene_tracker.dart';
 import '../scan_controller.dart';
+import '../services/command_center.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -21,7 +23,8 @@ class ScanScreen extends StatelessWidget {
       listenable: scan,
       builder: (context, _) {
         final money = scan.mode == ScanMode.currency;
-        final locked = scan.lastNote != null && scan.status == scan.lastNote?.spoken;
+        final locked = scan.lastNote != null && scan.status == scan.lastNote?.spokenIn(scan.s);
+        final danger = !money && scan.tracked.any((o) => o.hazard == Hazard.danger);
         return Scaffold(
           backgroundColor: Colors.black,
           body: Stack(fit: StackFit.expand, children: [
@@ -40,6 +43,8 @@ class ScanScreen extends StatelessWidget {
               ),
             ),
             if (money) _Reticle(locked: locked, scanning: scan.hasCurrencyModel && !locked),
+            _DangerGlow(on: danger),
+            if (scan.teaching != null) _TeachProgress(scan: scan),
             SafeArea(
               bottom: false,
               child: Column(children: [
@@ -98,11 +103,16 @@ class _Preview extends StatelessWidget {
     final size = c.value.previewSize;
     final w = size?.height ?? 1, h = size?.width ?? 1; // portrait
     return Semantics(
-      label: 'Camera view. Double tap to repeat the last result.',
+      label: '${scan.s.cameraView}. ${scan.status}',
+      hint: scan.s.cameraHint,
       button: true,
       excludeSemantics: true,
+      onTap: scan.repeatLast,
+      onLongPress: CommandCenter.instance.listen,
       child: GestureDetector(
-        onTap: () => scan.announcer.say(scan.status, dedupe: Duration.zero, force: true),
+        onTap: scan.repeatLast,
+        onDoubleTap: scan.describeNow,
+        onLongPress: CommandCenter.instance.listen,
         child: ClipRect(
           child: FittedBox(
             fit: BoxFit.cover,
@@ -112,7 +122,10 @@ class _Preview extends StatelessWidget {
               child: Stack(fit: StackFit.expand, children: [
                 CameraPreview(c),
                 if (scan.mode == ScanMode.scene)
-                  CustomPaint(painter: _BoxesPainter(scan.detections, context.colors.primary)),
+                  CustomPaint(
+                    painter: _BoxesPainter(scan.tracked, context.colors.primary, context.tokens.danger,
+                        SceneSpeech(scan.s, unit: scan.settings.distanceUnit)),
+                  ),
               ]),
             ),
           ),
@@ -123,19 +136,26 @@ class _Preview extends StatelessWidget {
 }
 
 class _BoxesPainter extends CustomPainter {
-  final List<Detection> dets;
-  final Color color;
-  _BoxesPainter(this.dets, this.color);
+  final List<Tracked> objects;
+  final Color color, dangerColor;
+  final SceneSpeech speech;
+  _BoxesPainter(this.objects, this.color, this.dangerColor, this.speech);
 
   @override
   void paint(Canvas canvas, Size size) {
     final s = size.width;
-    final stroke = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = s * 0.007
-      ..strokeCap = StrokeCap.round
-      ..color = color;
-    for (final d in dets.take(6)) {
+    for (final o in objects.take(6)) {
+      final d = o.frameBox;
+      final c = switch (o.hazard) {
+        Hazard.none => color,
+        Hazard.warning => const Color(0xFFFFB020),
+        Hazard.danger => dangerColor,
+      };
+      final stroke = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = s * (o.hazard == Hazard.none ? 0.007 : 0.011)
+        ..strokeCap = StrokeCap.round
+        ..color = c;
       final r = Rect.fromLTRB(d.left * size.width, d.top * size.height, d.right * size.width, d.bottom * size.height);
       // Corner brackets rather than a full box: lighter over the scene.
       final l = (r.shortestSide * 0.22).clamp(s * 0.03, s * 0.09);
@@ -155,7 +175,7 @@ class _BoxesPainter extends CustomPainter {
       }
       final tp = TextPainter(
         text: TextSpan(
-          text: '${d.label}  ${(d.score * 100).round()}%',
+          text: [speech.s.object(o.label), ?speech.howFar(o.distance)].join(' · '),
           style: TextStyle(color: Colors.black, fontSize: s * 0.034, fontWeight: FontWeight.w700, fontFamily: 'Inter'),
         ),
         textDirection: TextDirection.ltr,
@@ -166,13 +186,13 @@ class _BoxesPainter extends CustomPainter {
             tp.height + pad * 1.2),
         Radius.circular(s * 0.03),
       );
-      canvas.drawRRect(chip, Paint()..color = color);
+      canvas.drawRRect(chip, Paint()..color = c);
       tp.paint(canvas, Offset(chip.left + pad, chip.top + pad * 0.6));
     }
   }
 
   @override
-  bool shouldRepaint(_BoxesPainter old) => old.dets != dets;
+  bool shouldRepaint(_BoxesPainter old) => true; // tracked objects change in place
 }
 
 /// Note-shaped frame with a sweeping scan line; turns accent when locked.
@@ -290,8 +310,9 @@ class _ModeTabs extends StatelessWidget {
       return Semantics(
         selected: sel,
         button: true,
-        label: '$label mode',
+        label: label,
         excludeSemantics: true,
+        onTap: () => scan.setMode(m),
         child: Pressable(
           onTap: () => scan.setMode(m),
           child: Padding(
@@ -323,9 +344,9 @@ class _ModeTabs extends StatelessWidget {
     }
 
     return Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-      tab(ScanMode.currency, 'Money'),
+      tab(ScanMode.currency, scan.s.t('Money', 'Pesa')),
       Container(width: 1, height: 16, color: Colors.white38),
-      tab(ScanMode.scene, 'Objects'),
+      tab(ScanMode.scene, scan.s.t('Objects', 'Vitu')),
     ]);
   }
 }
@@ -342,25 +363,30 @@ class _ActionRail extends StatelessWidget {
     return Column(mainAxisSize: MainAxisSize.min, children: [
       _RailButton(
         icon: scan.torchOn ? Icons.flashlight_on_rounded : Icons.flashlight_off_rounded,
-        label: scan.torchOn ? 'Light on' : 'Light',
+        label: scan.torchOn ? scan.s.lightOn : scan.s.light,
         active: scan.torchOn,
         onTap: scan.toggleTorch,
       ),
       _RailButton(
         icon: Icons.replay_rounded,
-        label: 'Repeat',
-        onTap: () => scan.announcer.say(scan.status, dedupe: Duration.zero, force: true),
+        label: scan.s.repeat,
+        onTap: scan.repeatLast,
+      ),
+      _RailButton(
+        icon: Icons.mic_rounded,
+        label: scan.s.t('Speak', 'Ongea'),
+        onTap: CommandCenter.instance.listen,
       ),
       if (money) ...[
         _RailButton(
           icon: Icons.verified_user_rounded,
-          label: 'Check fake',
+          label: scan.s.checkFake,
           enabled: hasNote && !scan.authRunning,
           onTap: scan.checkAuthenticity,
         ),
         _RailButton(
           icon: Icons.add_rounded,
-          label: 'Add',
+          label: scan.s.add,
           enabled: hasNote,
           highlight: true,
           onTap: scan.addToTotal,
@@ -395,6 +421,7 @@ class _RailButton extends StatelessWidget {
       enabled: enabled,
       label: label,
       excludeSemantics: true,
+      onTap: enabled ? onTap : null,
       child: Padding(
         padding: const EdgeInsets.only(bottom: 14),
         child: Pressable(
@@ -445,7 +472,8 @@ class _Caption extends StatelessWidget {
   Widget build(BuildContext context) {
     final money = scan.mode == ScanMode.currency;
     final note = scan.lastNote;
-    final showNote = money && note != null && scan.status == note.spoken;
+    final showNote = note != null &&
+        (scan.status == note.spokenIn(scan.s) || scan.status == scan.s.banknoteFound(note.spokenIn(scan.s)));
 
     if (money && scan.modelsLoaded && !scan.hasCurrencyModel) return const _ModelMissing();
 
@@ -466,7 +494,7 @@ class _Caption extends StatelessWidget {
               Row(children: [
                 Text(currencyInfo(note.currency)?.flag ?? '', style: const TextStyle(fontSize: 22)),
                 const SizedBox(width: 8),
-                Text(currencyName(note.currency),
+                Text(scan.s.currencyName(note.currency),
                     style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, shadows: _shadow)),
               ]),
               const SizedBox(height: 4),
@@ -515,7 +543,7 @@ class _ConfidenceBar extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 10),
-        Text('${(value * 100).round()}% sure',
+        Text('${(value * 100).round()}%',
             style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.w600, fontSize: 13)),
       ]);
 }
@@ -527,20 +555,36 @@ class _SceneTags extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final labels = <String>{for (final d in scan.detections) d.label};
+    final speech = SceneSpeech(scan.s, unit: scan.settings.distanceUnit);
+    final objects = scan.tracked.take(5).toList();
     final guess = scan.sceneGuess;
-    if (labels.isEmpty && guess == null) return const SizedBox.shrink();
+    if (objects.isEmpty && guess == null) {
+      return scan.lookingDown
+          ? _tag(context, Icons.screen_rotation_alt_rounded, scan.s.pointingDown)
+          : const SizedBox.shrink();
+    }
     return Wrap(spacing: 8, runSpacing: 8, children: [
-      for (final l in labels.take(5)) _tag(context, Icons.label_rounded, l, filled: true),
-      if (guess != null && !labels.contains(guess))
-        _tag(context, Icons.auto_awesome_rounded, '$guess ${(scan.sceneGuessScore * 100).round()}%'),
+      for (final o in objects)
+        _tag(
+          context,
+          o.hazard == Hazard.none ? Icons.label_rounded : Icons.warning_rounded,
+          [scan.s.object(o.label), ?speech.howFar(o.distance)].join(' · '),
+          filled: true,
+          color: switch (o.hazard) {
+            Hazard.none => null,
+            Hazard.warning => const Color(0xFFFFB020),
+            Hazard.danger => context.tokens.danger,
+          },
+        ),
+      if (guess != null && !objects.any((o) => o.label == guess))
+        _tag(context, Icons.auto_awesome_rounded, scan.s.object(guess)),
     ]);
   }
 
-  Widget _tag(BuildContext context, IconData icon, String text, {bool filled = false}) => Container(
+  Widget _tag(BuildContext context, IconData icon, String text, {bool filled = false, Color? color}) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
         decoration: BoxDecoration(
-          color: filled ? context.colors.primary : Colors.white.withValues(alpha: 0.18),
+          color: filled ? (color ?? context.colors.primary) : Colors.white.withValues(alpha: 0.18),
           borderRadius: BorderRadius.circular(20),
         ),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
@@ -719,6 +763,73 @@ class _AuthSheet extends StatelessWidget {
             _ => 'Get ready',
           }, style: context.text.bodyMedium?.copyWith(color: t.muted)),
       ]),
+    );
+  }
+}
+
+/// A red glow around the screen edge while something is dangerously close.
+class _DangerGlow extends StatelessWidget {
+  final bool on;
+  const _DangerGlow({required this.on});
+
+  @override
+  Widget build(BuildContext context) => IgnorePointer(
+        child: AnimatedOpacity(
+          opacity: on ? 1 : 0,
+          duration: const Duration(milliseconds: 220),
+          child: Container(
+            decoration: BoxDecoration(
+              border: Border.all(color: context.tokens.danger, width: 6),
+              boxShadow: [
+                BoxShadow(color: context.tokens.danger.withValues(alpha: 0.6), blurRadius: 40, spreadRadius: -6),
+              ],
+            ),
+          ),
+        ),
+      );
+}
+
+/// Progress while teaching a note: a ring that fills as samples are collected.
+class _TeachProgress extends StatelessWidget {
+  final ScanController scan;
+  const _TeachProgress({required this.scan});
+
+  @override
+  Widget build(BuildContext context) {
+    final v = scan.teachSamples / ScanController.teachTarget;
+    return Positioned(
+      top: MediaQuery.paddingOf(context).top + 60,
+      left: 16,
+      right: 16,
+      child: Center(
+        child: GlassPanel(
+          radius: 24,
+          padding: const EdgeInsets.fromLTRB(14, 6, 4, 6),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            SizedBox(
+              width: 26,
+              height: 26,
+              child: TweenAnimationBuilder<double>(
+                tween: Tween(end: v.clamp(0, 1).toDouble()),
+                duration: const Duration(milliseconds: 250),
+                builder: (context, x, _) => CircularProgressIndicator(
+                    value: x, strokeWidth: 4, color: context.colors.primary, backgroundColor: Colors.white24),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Flexible(
+              child: Text('${scan.s.teachNote}: ${scan.teaching!.spokenIn(scan.s)}',
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+            ),
+            IconButton(
+              tooltip: scan.s.t('Cancel', 'Ghairi'),
+              onPressed: scan.cancelTeach,
+              icon: const Icon(Icons.close_rounded, color: Colors.white),
+            ),
+          ]),
+        ),
+      ),
     );
   }
 }

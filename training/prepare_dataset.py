@@ -224,6 +224,12 @@ def split_by_group(samples: list[Sample], val: float, test: float, seed: int) ->
     for label, groups in by_label.items():
         group_list = list(groups.values())
         rng.shuffle(group_list)
+        if len(group_list) < 6:
+            # Too few distinct photos to hold any back: train on all of them.
+            for g in group_list:
+                for s in g:
+                    s.split = "train"
+            continue
         total = sum(len(g) for g in group_list)
         taken = {"test": 0, "val": 0}
         for g in group_list:
@@ -266,11 +272,14 @@ def make_composite(note: Image.Image, bg: Image.Image, rng: random.Random, size:
     return bg
 
 
-def write_composites(out: Path, train: list[Sample], per_class: int, extra_bg_dir: str | None, seed: int) -> int:
+def write_composites(out: Path, train: list[Sample], per_class: int, extra_bg_dir: str | None, seed: int,
+                     min_total: int = 0) -> int:
     rng = random.Random(seed)
     bg_paths = [s.path for s in train if s.label == BACKGROUND and s.box is None]
     if extra_bg_dir:
-        bg_paths += list(_images_under(Path(extra_bg_dir)))
+        extra = list(_images_under(Path(extra_bg_dir)))
+        random.Random(seed).shuffle(extra)
+        bg_paths += extra[:3000]
     if not bg_paths:
         print("  no background images; skipping composites")
         return 0
@@ -281,7 +290,8 @@ def write_composites(out: Path, train: list[Sample], per_class: int, extra_bg_di
     written = 0
     for label, items in by_label.items():
         (out / "train" / label).mkdir(parents=True, exist_ok=True)
-        for k in range(per_class):
+        # Classes with few real photos (scans) get topped up to min_total.
+        for k in range(max(per_class, min_total - len(items))):
             s = rng.choice(items)
             bg = ImageOps.exif_transpose(Image.open(rng.choice(bg_paths))).convert("RGB")
             img = make_composite(load_sample_image(s), bg, rng)
@@ -302,6 +312,8 @@ def main() -> None:
     ap.add_argument("--dup-distance", type=int, default=3, help="dHash Hamming distance treated as duplicate (max 3)")
     ap.add_argument("--composites-per-class", type=int, default=0, help="synthetic train images per note class")
     ap.add_argument("--background-dir", default=None, help="extra background photos for composites")
+    ap.add_argument("--composites-min-total", type=int, default=0,
+                    help="add composites until each note class has at least this many train images")
     ap.add_argument("--max-per-source-label", type=int, default=0,
                     help="cap samples per (source, label) before splitting; 0 = no cap")
     args = ap.parse_args()
@@ -373,7 +385,7 @@ def main() -> None:
 
     if args.composites_per_class:
         n = write_composites(out, [s for s in samples if s.split == "train"],
-                             args.composites_per_class, args.background_dir, args.seed)
+                             args.composites_per_class, args.background_dir, args.seed, args.composites_min_total)
         print(f"wrote {n} synthetic composites into train/")
 
     labels = sorted({s.label for s in samples})

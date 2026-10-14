@@ -450,6 +450,10 @@ class ScanController extends ChangeNotifier {
 
   Future<void> toggleTorch() => setTorch(!torchOn);
 
+  /// Says how to use the current mode.
+  void repeatModeHint() =>
+      announcer.say(mode == ScanMode.currency ? s.moneyMode : s.objectsMode, priority: Priority.high, dedupe: Duration.zero);
+
   /// Says the last result again, at once.
   void repeatLast() {
     final text = status.isEmpty ? (mode == ScanMode.currency ? s.pointAtNote : s.describing) : status;

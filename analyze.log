@@ -1,0 +1,19 @@
+Analyzing app...                                                
+
+   info - 'localeId' is deprecated and shouldn't be used. Use SpeechListenOptions.localeId instead. Try replacing the use of the deprecated member with the replacement - lib\services\voice_commands.dart:110:9 - deprecated_member_use
+   info - 'listenFor' is deprecated and shouldn't be used. Use SpeechListenOptions.listenFor instead. Try replacing the use of the deprecated member with the replacement - lib\services\voice_commands.dart:111:9 - deprecated_member_use
+   info - 'pauseFor' is deprecated and shouldn't be used. Use SpeechListenOptions.pauseFor instead. Try replacing the use of the deprecated member with the replacement - lib\services\voice_commands.dart:112:9 - deprecated_member_use
+   info - The import of 'package:flutter/semantics.dart' is unnecessary because all of the used elements are also provided by the import of 'package:flutter/rendering.dart'. Try removing the import directive - lib\ui\voice_guide.dart:3:8 - unnecessary_import
+   info - 'hasFlag' is deprecated and shouldn't be used. Use flagsCollection instead. This feature was deprecated after v3.32.0-0.0.pre. Try replacing the use of the deprecated member with the replacement - lib\ui\voice_guide.dart:86:13 - deprecated_member_use
+   info - 'hasFlag' is deprecated and shouldn't be used. Use flagsCollection instead. This feature was deprecated after v3.32.0-0.0.pre. Try replacing the use of the deprecated member with the replacement - lib\ui\voice_guide.dart:118:13 - deprecated_member_use
+   info - 'hasFlag' is deprecated and shouldn't be used. Use flagsCollection instead. This feature was deprecated after v3.32.0-0.0.pre. Try replacing the use of the deprecated member with the replacement - lib\ui\voice_guide.dart:118:55 - deprecated_member_use
+   info - 'hasFlag' is deprecated and shouldn't be used. Use flagsCollection instead. This feature was deprecated after v3.32.0-0.0.pre. Try replacing the use of the deprecated member with the replacement - lib\ui\voice_guide.dart:119:13 - deprecated_member_use
+   info - 'hasFlag' is deprecated and shouldn't be used. Use flagsCollection instead. This feature was deprecated after v3.32.0-0.0.pre. Try replacing the use of the deprecated member with the replacement - lib\ui\voice_guide.dart:119:57 - deprecated_member_use
+   info - 'hasFlag' is deprecated and shouldn't be used. Use flagsCollection instead. This feature was deprecated after v3.32.0-0.0.pre. Try replacing the use of the deprecated member with the replacement - lib\ui\voice_guide.dart:120:13 - deprecated_member_use
+   info - 'hasFlag' is deprecated and shouldn't be used. Use flagsCollection instead. This feature was deprecated after v3.32.0-0.0.pre. Try replacing the use of the deprecated member with the replacement - lib\ui\voice_guide.dart:121:13 - deprecated_member_use
+   info - 'hasFlag' is deprecated and shouldn't be used. Use flagsCollection instead. This feature was deprecated after v3.32.0-0.0.pre. Try replacing the use of the deprecated member with the replacement - lib\ui\voice_guide.dart:122:13 - deprecated_member_use
+   info - 'hasFlag' is deprecated and shouldn't be used. Use flagsCollection instead. This feature was deprecated after v3.32.0-0.0.pre. Try replacing the use of the deprecated member with the replacement - lib\ui\voice_guide.dart:122:58 - deprecated_member_use
+   info - 'hasFlag' is deprecated and shouldn't be used. Use flagsCollection instead. This feature was deprecated after v3.32.0-0.0.pre. Try replacing the use of the deprecated member with the replacement - lib\ui\voice_guide.dart:178:16 - deprecated_member_use
+   info - 'hasFlag' is deprecated and shouldn't be used. Use flagsCollection instead. This feature was deprecated after v3.32.0-0.0.pre. Try replacing the use of the deprecated member with the replacement - lib\ui\voice_guide.dart:178:61 - deprecated_member_use
+
+15 issues found. (ran in 21.4s)

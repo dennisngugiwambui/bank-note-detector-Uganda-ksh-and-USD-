@@ -1,0 +1,66 @@
+C:\Users\Softclans\Desktop\bank note detection\training\prepare_dataset.py:181: DeprecationWarning: Image.Image.getdata is deprecated and will be removed in Pillow 14 (2027-10-15). Use get_flattened_data instead.
+  px = list(g.getdata())
+kes_commons: 41 samples
+kes_ugx_wpm: 192 samples
+own_photos: 0 samples
+egp_kaggle: 3218 samples
+inr_notes_kaggle: 195 samples
+  [inr_coins_kaggle] skipped unmapped classes: {'invalid': 350, 'reverse': 350}
+inr_coins_kaggle: 1050 samples
+  [usd_kaggle] skipped unmapped classes: {'Test Set': 6}
+usd_kaggle: 2100 samples
+usd_rf100: 1882 samples
+background_rooms: 1400 samples
+background_streets: 500 samples
+Hashing images...
+9007 samples in 7861 duplicate groups; dropped 30 conflicting groups
+NOTE: not cleared for a paid release (non-commercial or unknown license): ['kes_ugx_wpm']
+wrote 12170 synthetic composites into train/
+
+label          train     val    test
+EGP_1                208      45      45
+EGP_10               420      90      90
+EGP_100              204      44      44
+EGP_1_coin           160      35      35
+EGP_20               428      92      92
+EGP_200              208      45      45
+EGP_5                209      45      45
+EGP_50               225      49      50
+EGP_50c_coin         146      32      32  <- under 150 train images
+INR_10                17       5       5  <- under 150 train images
+INR_100               18       5       5  <- under 150 train images
+INR_1_coin            48      11      11  <- under 150 train images
+INR_20                18       5       5  <- under 150 train images
+INR_200               17       6       5  <- under 150 train images
+INR_2000              17       5       5  <- under 150 train images
+INR_2_coin            43      12      13  <- under 150 train images
+INR_50                17       5       5  <- under 150 train images
+INR_500               18       5       5  <- under 150 train images
+INR_5_coin            44      10      11  <- under 150 train images
+KES_100                4       9       3  <- under 150 train images
+KES_1000              14       3       3  <- under 150 train images
+KES_10_coin            3       1       1  <- under 150 train images
+KES_1_coin             1       1       1  <- under 150 train images
+KES_200               12       3       3  <- under 150 train images
+KES_20_coin            4       1       1  <- under 150 train images
+KES_50                14       4       4  <- under 150 train images
+KES_500                8       3       3  <- under 150 train images
+KES_5_coin             0       1       1  <- under 150 train images
+UGX_1000              10       3       3  <- under 150 train images
+UGX_10000             10       3       5  <- under 150 train images
+UGX_2000               8       5       3  <- under 150 train images
+UGX_20000              7       6       3  <- under 150 train images
+UGX_5000              12       3       3  <- under 150 train images
+UGX_50000             10       3       3  <- under 150 train images
+USD_1                237      51      51
+USD_10               273      86      75
+USD_100              269      59      59
+USD_10c_coin         221      49      48
+USD_1c_coin          226      49      49
+USD_2                 72      18      17  <- under 150 train images
+USD_20                63      16      15  <- under 150 train images
+USD_25c_coin         227      49      49
+USD_5                245      53      53
+USD_50               195      93      51
+USD_5c_coin          228      50      50
+background          1326     285     285

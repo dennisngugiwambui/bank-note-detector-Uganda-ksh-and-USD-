@@ -144,7 +144,7 @@ class _WalletScreenState extends State<WalletScreen> {
 
 class _BankCard extends StatelessWidget {
   final String iso;
-  final int total;
+  final num total;
   final int index;
   const _BankCard({required this.iso, required this.total, required this.index});
 
@@ -202,7 +202,7 @@ class _BankCard extends StatelessWidget {
                     duration: const Duration(milliseconds: 700),
                     curve: Curves.easeOutCubic,
                     builder: (context, v, _) => Text(
-                      formatAmount(iso, v.round()),
+                      formatAmount(iso, (v * 100).round() / 100),
                       style: context.text.displaySmall?.copyWith(color: Colors.white),
                     ),
                   ),

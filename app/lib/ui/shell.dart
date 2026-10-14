@@ -2,11 +2,15 @@ import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../core/activity.dart';
 import '../core/app_scope.dart';
+import '../core/currency.dart';
 import '../scan_controller.dart';
 import '../services/announcer.dart';
+import '../services/command_center.dart';
+import '../services/voice_commands.dart';
 import 'activity_screen.dart';
 import 'home_screen.dart';
 import 'nav_icons.dart';
@@ -22,7 +26,12 @@ import 'widgets.dart';
 /// fill when selected with a soft accent pill behind them, and one raised
 /// accent disc for the main action. Over the camera it turns dark.
 /// The camera runs only while Scan is visible and the app is in the
-/// foreground. Safety and counterfeit alerts pop up as banners on any tab.
+/// foreground. Pop-up banners are off by default (blind users hear every
+/// alert); a sighted helper can turn them on in Settings.
+///
+/// Voice commands (press and hold anywhere, the mic button, or an Android
+/// shortcut / "Hey Google, open NoteLens") are handled here, since they
+/// navigate between tabs.
 class AppShell extends StatefulWidget {
   const AppShell({super.key});
 
@@ -35,39 +44,184 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   ActivityEvent? _banner;
   Timer? _bannerTimer;
   StreamSubscription<ActivityEvent>? _alerts;
+  final VoiceCommands _voice = VoiceCommands();
+  static const _system = MethodChannel('notelens/system');
 
-  static const _activity = 1, _scanTab = 2, _wallet = 3;
+  static const _home = 0, _activity = 1, _scanTab = 2, _wallet = 3, _settings = 4;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    CommandCenter.instance.handler = _listen;
+    _system.setMethodCallHandler((call) async {
+      if (call.method == 'launchAction') _runLaunchAction(call.arguments as String?);
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       final scope = AppScope.of(context);
-      scope.scan.loadModels();
       _alerts = scope.activity.alerts.listen(_showBanner);
+      await scope.scan.loadModels();
+      if (!mounted) return;
+      String? action;
+      try {
+        action = await _system.invokeMethod<String>('takeLaunchAction');
+      } catch (_) {}
+      if (!mounted) return;
+      if (action != null) {
+        _runLaunchAction(action);
+      } else {
+        final st = scope.settings;
+        final explain = st.voiceGuide && !st.guideIntroduced && !MediaQuery.accessibleNavigationOf(context);
+        scope.scan.announcer.say(explain ? '${st.strings.appReady} ${st.strings.voiceGuideOn}' : st.strings.appReady,
+            priority: Priority.normal);
+        if (explain) st.update((x) => x.guideIntroduced = true);
+        if (scope.settings.listenOnOpen) _listen();
+      }
     });
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    if (CommandCenter.instance.handler == _listen) CommandCenter.instance.handler = null;
     _alerts?.cancel();
     _bannerTimer?.cancel();
+    _voice.dispose();
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    final scan = AppScope.of(context).scan;
+    final scope = AppScope.of(context);
+    final scan = scope.scan;
     if (state == AppLifecycleState.paused) {
       scan.stopCamera();
-    } else if (state == AppLifecycleState.resumed && _tab == _scanTab) {
-      scan.startCamera();
+      _voice.cancel();
+    } else if (state == AppLifecycleState.resumed) {
+      if (_tab == _scanTab) scan.startCamera();
+      _checkLaunchAction();
     }
   }
 
+  Future<void> _checkLaunchAction() async {
+    try {
+      final a = await _system.invokeMethod<String>('takeLaunchAction');
+      if (a != null) _runLaunchAction(a);
+    } catch (_) {}
+  }
+
+  /// Actions from Android app shortcuts and assistant intents.
+  void _runLaunchAction(String? action) {
+    switch (action) {
+      case 'scan_money':
+        _select(_scanTab, mode: ScanMode.currency);
+      case 'around_me':
+        _select(_scanTab, mode: ScanMode.scene);
+      case 'voice_command':
+        _listen();
+    }
+  }
+
+  // ---------------------------------------------------------------- voice
+
+  Future<void> _listen() async {
+    final scope = AppScope.of(context);
+    final scan = scope.scan;
+    final s = scope.settings.strings;
+    if (_voice.listening) {
+      await _voice.cancel();
+      return;
+    }
+    await scan.announcer.stop();
+    scan.announcer.buzz(Buzz.light);
+    if (!await _voice.init()) {
+      scan.announcer.say(s.micUnavailable, priority: Priority.high, force: true);
+      return;
+    }
+    CommandCenter.instance.listening.value = true;
+    final heard = await _voice.listen(scope.settings.speechLocale);
+    CommandCenter.instance.listening.value = false;
+    if (!mounted) return;
+    final cmd = parseCommand(heard);
+    if (cmd == null) {
+      scan.announcer.say(s.didNotCatch, priority: Priority.high, dedupe: Duration.zero, force: true);
+      return;
+    }
+    _run(cmd);
+  }
+
+  void _run(Command cmd) {
+    final scope = AppScope.of(context);
+    final scan = scope.scan;
+    final settings = scope.settings;
+    final s = settings.strings;
+    void say(String t) => scan.announcer.say(t, priority: Priority.high, dedupe: Duration.zero, force: true);
+    switch (cmd) {
+      case Command.scanMoney:
+        _select(_scanTab, mode: ScanMode.currency, announce: true);
+      case Command.objects:
+        if (_tab == _scanTab && scan.mode == ScanMode.scene) {
+          scan.describeNow();
+        } else {
+          _select(_scanTab, mode: ScanMode.scene, announce: true);
+        }
+      case Command.total:
+        say(scan.totalsSentence());
+      case Command.add:
+        scan.addToTotal();
+      case Command.checkFake:
+        if (_tab != _scanTab) _select(_scanTab, mode: ScanMode.currency);
+        scan.checkAuthenticity();
+      case Command.repeat:
+        scan.repeatLast();
+      case Command.light:
+        if (_tab != _scanTab) _select(_scanTab);
+        scan.toggleTorch();
+      case Command.teach:
+        _select(_settings);
+        say(s.teachIntro);
+      case Command.home:
+        _select(_home);
+        say(s.home);
+      case Command.wallet:
+        _select(_wallet);
+        say(scan.totalsSentence());
+      case Command.settings:
+        _select(_settings);
+        say(s.settings);
+      case Command.activity:
+        _select(_activity);
+        say(s.activity);
+      case Command.faster:
+        settings.update((x) => x.speechRate = (x.speechRate + 0.1).clamp(0.2, 0.9));
+        say(s.speechFaster);
+      case Command.slower:
+        settings.update((x) => x.speechRate = (x.speechRate - 0.1).clamp(0.2, 0.9));
+        say(s.speechSlower);
+      case Command.time:
+        final now = DateTime.now();
+        say(s.timeNow(now.hour, now.minute));
+      case Command.help:
+        say(s.commandsHelp);
+      case Command.stop:
+        scan.announcer.stop();
+        if (_tab == _scanTab) _select(_home);
+      case Command.guideOn:
+        settings.update((x) => x.voiceGuide = true);
+        say(s.voiceGuideOn);
+      case Command.guideOff:
+        settings.update((x) => x.voiceGuide = false);
+        say(s.voiceGuideOff);
+    }
+  }
+
+  void _teach(Note note) {
+    _select(_scanTab, mode: ScanMode.currency);
+    AppScope.of(context).scan.startTeach(note);
+  }
+
   void _showBanner(ActivityEvent e) {
+    if (!AppScope.of(context).settings.showAlertBanners) return;
     _bannerTimer?.cancel();
     setState(() => _banner = e);
     _bannerTimer = Timer(const Duration(seconds: 6), () {
@@ -75,9 +229,15 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     });
   }
 
-  void _select(int i, {ScanMode? mode}) {
+  /// Opening the camera announces the mode itself, so the mode is only
+  /// announced here when the scanner is already open.
+  void _select(int i, {ScanMode? mode, bool announce = false}) {
     final scan = AppScope.of(context).scan;
-    if (mode != null) scan.setMode(mode);
+    if (mode != null) {
+      final already = i == _tab && scan.mode == mode;
+      scan.setMode(mode, announce: i == _tab);
+      if (already && announce) scan.repeatModeHint();
+    }
     if (i == _tab) return;
     setState(() => _tab = i);
     scan.announcer.buzz(Buzz.light);
@@ -102,7 +262,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       // Built only while visible: the offstage camera spinner would otherwise keep redrawing.
       _tab == _scanTab ? const ScanScreen() : const SizedBox.shrink(),
       WalletScreen(openScan: () => _select(_scanTab, mode: ScanMode.currency)),
-      const SettingsScreen(),
+      SettingsScreen(onTeach: _teach),
     ];
     return Scaffold(
       extendBody: true,
@@ -145,6 +305,13 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       bottomNavigationBar: ListenableBuilder(
         listenable: scope.activity,
         builder: (context, _) => _NavBar(
+          labels: [
+            scope.settings.strings.home,
+            scope.settings.strings.activity,
+            scope.settings.strings.scan,
+            scope.settings.strings.wallet,
+            scope.settings.strings.settings,
+          ],
           index: _tab,
           unread: scope.activity.unread,
           overCamera: _tab == _scanTab,
@@ -156,18 +323,19 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
 }
 
 class _NavBar extends StatelessWidget {
+  final List<String> labels;
   final int index;
   final int unread;
   final bool overCamera;
   final void Function(int) onSelect;
-  const _NavBar({required this.index, required this.unread, required this.overCamera, required this.onSelect});
+  const _NavBar({required this.labels, required this.index, required this.unread, required this.overCamera, required this.onSelect});
 
-  static const _items = <(IconData, IconData, String)>[
-    (NavIcons.home, NavIcons.homeFill, 'Home'),
-    (NavIcons.bell, NavIcons.bellFill, 'Activity'),
-    (NavIcons.scan, NavIcons.scanBold, 'Scan'),
-    (NavIcons.wallet, NavIcons.walletFill, 'Wallet'),
-    (NavIcons.gear, NavIcons.gearFill, 'Settings'),
+  static const _items = <(IconData, IconData)>[
+    (NavIcons.home, NavIcons.homeFill),
+    (NavIcons.bell, NavIcons.bellFill),
+    (NavIcons.scan, NavIcons.scanBold),
+    (NavIcons.wallet, NavIcons.walletFill),
+    (NavIcons.gear, NavIcons.gearFill),
   ];
 
   @override
@@ -193,10 +361,11 @@ class _NavBar extends StatelessWidget {
                 for (var i = 0; i < _items.length; i++)
                   Expanded(
                     child: i == 2
-                        ? _ScanButton(selected: index == 2, onTap: () => onSelect(2), icon: _items[2].$2)
+                        ? _ScanButton(
+                            selected: index == 2, onTap: () => onSelect(2), icon: _items[2].$2, label: labels[2])
                         : _NavItem(
                             icon: index == i ? _items[i].$2 : _items[i].$1,
-                            label: _items[i].$3,
+                            label: labels[i],
                             selected: index == i,
                             ink: ink,
                             muted: muted,
@@ -244,6 +413,7 @@ class _NavItem extends StatelessWidget {
       button: true,
       label: badge > 0 ? '$label, $badge unread' : label,
       excludeSemantics: true,
+      onTap: onTap,
       child: Pressable(
         onTap: onTap,
         pressedScale: 0.9,
@@ -294,7 +464,8 @@ class _ScanButton extends StatelessWidget {
   final bool selected;
   final VoidCallback onTap;
   final IconData icon;
-  const _ScanButton({required this.selected, required this.onTap, required this.icon});
+  final String label;
+  const _ScanButton({required this.selected, required this.onTap, required this.icon, required this.label});
 
   @override
   Widget build(BuildContext context) {
@@ -302,8 +473,9 @@ class _ScanButton extends StatelessWidget {
     return Semantics(
       selected: selected,
       button: true,
-      label: 'Scan',
+      label: label,
       excludeSemantics: true,
+      onTap: onTap,
       child: Pressable(
         onTap: onTap,
         pressedScale: 0.9,

@@ -4,6 +4,7 @@ import '../core/activity.dart';
 import '../core/app_scope.dart';
 import '../core/currency.dart';
 import '../scan_controller.dart';
+import '../services/command_center.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -16,9 +17,14 @@ class HomeScreen extends StatelessWidget {
   final VoidCallback openWallet;
   const HomeScreen({super.key, required this.openScan, required this.openActivity, required this.openWallet});
 
-  String _greeting() {
+  String _greeting(AppScope scope) {
     final h = DateTime.now().hour;
-    return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
+    final s = scope.settings.strings;
+    return h < 12
+        ? s.t('Good morning', 'Habari za asubuhi')
+        : h < 17
+            ? s.t('Good afternoon', 'Habari za mchana')
+            : s.t('Good evening', 'Habari za jioni');
   }
 
   @override
@@ -29,6 +35,7 @@ class HomeScreen extends StatelessWidget {
       listenable: Listenable.merge([scope.activity, scope.scan, scope.settings]),
       builder: (context, _) {
         final scan = scope.scan;
+        final L = scope.settings.strings;
         var i = 0;
         Widget item(Widget w) => FadeSlideIn(delay: FadeSlideIn.stagger(i++), child: w);
         return SafeArea(
@@ -51,35 +58,49 @@ class HomeScreen extends StatelessWidget {
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(_greeting(), style: context.text.bodyMedium?.copyWith(color: context.tokens.muted)),
+                    Text(_greeting(scope), style: context.text.bodyMedium?.copyWith(color: context.tokens.muted)),
                     Text(user?.firstName ?? 'Guest', style: context.text.titleLarge),
                   ]),
                 ),
                 _RoundButton(
                   icon: Icons.notifications_none_rounded,
                   badge: scope.activity.unread,
-                  tooltip: 'Activity, ${scope.activity.unread} unread',
+                  tooltip: '${L.activity}, ${L.unread(scope.activity.unread)}',
                   onTap: openActivity,
                 ),
               ])),
               const SizedBox(height: 22),
               item(Semantics(
                 header: true,
-                child: Text('What would you\nlike to check?', style: context.text.displaySmall),
+                child: Text(L.t('What would you\nlike to check?', 'Ungependa\nkukagua nini?'),
+                    style: context.text.displaySmall),
               )),
               const SizedBox(height: 18),
               item(_ScanHero(
+                label: '${L.scanMoney}. ${L.scanMoneyHint}',
                 onTap: () => openScan(ScanMode.currency),
                 modelReady: scan.hasCurrencyModel || !scan.modelsLoaded,
               )),
               const SizedBox(height: 12),
               item(_QuickPill(
                 icon: Icons.visibility_rounded,
-                text: 'What is in front of me?',
+                text: L.aroundMe,
+                hint: L.aroundMeHint,
                 onTap: () => openScan(ScanMode.scene),
               )),
-              item(SectionTitle('Learn your notes',
-                  trailing: Text('${scope.settings.enabledCurrencies.length} on',
+              const SizedBox(height: 12),
+              item(ValueListenableBuilder<bool>(
+                valueListenable: CommandCenter.instance.listening,
+                builder: (context, listening, _) => _QuickPill(
+                  icon: listening ? Icons.graphic_eq_rounded : Icons.mic_rounded,
+                  text: listening ? L.listening : L.voiceCommand,
+                  hint: L.voiceCommandHint,
+                  highlight: listening,
+                  onTap: CommandCenter.instance.listen,
+                ),
+              )),
+              item(SectionTitle(L.t('Learn your money', 'Jifunze pesa zako'),
+                  trailing: Text('${scope.settings.enabledCurrencies.length}',
                       style: context.text.labelLarge?.copyWith(color: context.tokens.muted)))),
               item(SizedBox(
                 height: 104,
@@ -93,8 +114,10 @@ class HomeScreen extends StatelessWidget {
                     final on = scope.settings.enabledCurrencies.contains(c.iso);
                     return Semantics(
                       button: true,
-                      label: '${currencyName(c.iso)}. Notes and how to check them.',
+                      label: L.t('${L.currencyName(c.iso)}. Notes, coins and how to check them.',
+                          '${L.currencyName(c.iso)}. Noti, sarafu na jinsi ya kuzikagua.'),
                       excludeSemantics: true,
+                      onTap: () => showCurrencySheet(context, c),
                       child: Pressable(
                         onTap: () => showCurrencySheet(context, c),
                         child: Column(children: [
@@ -115,30 +138,39 @@ class HomeScreen extends StatelessWidget {
                   },
                 ),
               )),
-              item(const SectionTitle('Services')),
+              item(SectionTitle(L.t('Services', 'Huduma'))),
               item(_ServicesGrid(
                 tiles: [
-                  _Service(Icons.payments_rounded, 'Money', 'Hear the value', context.colors.primary,
-                      () => openScan(ScanMode.currency)),
-                  _Service(Icons.verified_user_rounded, 'Fakes', 'Print · light · UV', const Color(0xFF8B7CF6),
+                  _Service(Icons.payments_rounded, L.t('Money', 'Pesa'), L.t('Notes and coins', 'Noti na sarafu'),
+                      context.colors.primary, () => openScan(ScanMode.currency)),
+                  _Service(Icons.verified_user_rounded, L.t('Fakes', 'Bandia'),
+                      L.t('Print · light · UV', 'Chapa · mwanga · UV'), const Color(0xFF8B7CF6),
                       () => openScan(ScanMode.currency),
-                      semantic: 'Check for fakes. Identify a note in the scanner, then press Check fake.'),
-                  _Service(Icons.visibility_rounded, 'Around me',
-                      scope.settings.obstacleAlerts ? 'Alerts on' : 'Alerts off', const Color(0xFF38BDF8),
+                      semantic: L.t('Check for fakes. Identify a note in the scanner, then press Check fake.',
+                          'Kagua bandia. Tambua noti kwenye kamera, kisha bonyeza Kagua bandia.')),
+                  _Service(
+                      Icons.visibility_rounded,
+                      L.t('Around me', 'Karibu nami'),
+                      scope.settings.obstacleAlerts
+                          ? L.t('Alerts on', 'Tahadhari zimewashwa')
+                          : L.t('Alerts off', 'Tahadhari zimezimwa'),
+                      const Color(0xFF38BDF8),
                       () => openScan(ScanMode.scene)),
-                  _Service(Icons.account_balance_wallet_rounded, 'Wallet', _walletLine(scope.activity.totals),
+                  _Service(Icons.account_balance_wallet_rounded, L.wallet, _walletLine(scope.activity.totals),
                       const Color(0xFFFF8A4C), openWallet),
                 ],
               )),
-              item(SectionTitle('Recent activity',
-                  trailing: TextButton(onPressed: openActivity, child: const Text('See all')))),
+              item(SectionTitle(L.t('Recent activity', 'Shughuli za karibuni'),
+                  trailing: TextButton(onPressed: openActivity, child: Text(L.t('See all', 'Ona zote'))))),
               item(scope.activity.events.isEmpty
                   ? BentoCard(
                       child: Row(children: [
                         const IconBadge(Icons.history_rounded),
                         const SizedBox(width: 14),
                         Expanded(
-                          child: Text('Notes you scan, verdicts and alerts appear here.',
+                          child: Text(
+                              L.t('Money you scan, checks and alerts appear here.',
+                                  'Pesa unazosoma, ukaguzi na tahadhari huonekana hapa.'),
                               style: context.text.bodyLarge?.copyWith(color: context.tokens.muted)),
                         ),
                       ]),
@@ -156,7 +188,7 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  static String _walletLine(Map<String, int> totals) {
+  static String _walletLine(Map<String, num> totals) {
     if (totals.isEmpty) return 'Empty';
     final e = totals.entries.first;
     return formatAmount(e.key, e.value) + (totals.length > 1 ? ' +${totals.length - 1}' : '');
@@ -175,6 +207,7 @@ class _RoundButton extends StatelessWidget {
         button: true,
         label: tooltip,
         excludeSemantics: true,
+        onTap: onTap,
         child: Pressable(
           onTap: onTap,
           child: Container(
@@ -201,9 +234,10 @@ class _RoundButton extends StatelessWidget {
 
 /// Primary action: gradient card with drifting colour and a pulsing scan glyph.
 class _ScanHero extends StatelessWidget {
+  final String label;
   final VoidCallback onTap;
   final bool modelReady;
-  const _ScanHero({required this.onTap, required this.modelReady});
+  const _ScanHero({required this.label, required this.onTap, required this.modelReady});
 
   @override
   Widget build(BuildContext context) {
@@ -211,8 +245,9 @@ class _ScanHero extends StatelessWidget {
     const on = Colors.white;
     return Semantics(
       button: true,
-      label: 'Scan a banknote. Opens the camera and speaks the value.',
+      label: label,
       excludeSemantics: true,
+      onTap: onTap,
       child: Pressable(
         onTap: onTap,
         child: Container(
@@ -335,27 +370,35 @@ class _PulsingScanState extends State<_PulsingScan> with SingleTickerProviderSta
 class _QuickPill extends StatelessWidget {
   final IconData icon;
   final String text;
+  final String hint;
+  final bool highlight;
   final VoidCallback onTap;
-  const _QuickPill({required this.icon, required this.text, required this.onTap});
+  const _QuickPill(
+      {required this.icon, required this.text, required this.hint, required this.onTap, this.highlight = false});
 
   @override
   Widget build(BuildContext context) => Semantics(
         button: true,
-        label: '$text Opens objects mode.',
+        label: text,
+        hint: hint,
         excludeSemantics: true,
+        onTap: onTap,
         child: Pressable(
           onTap: onTap,
-          child: Container(
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 250),
             height: 64,
             padding: const EdgeInsets.only(left: 20, right: 8),
             decoration: BoxDecoration(
-              color: context.tokens.card,
+              color: highlight ? context.colors.primary.withValues(alpha: 0.18) : context.tokens.card,
               borderRadius: BorderRadius.circular(32),
-              border: Border.all(color: context.tokens.line),
-              boxShadow: context.tokens.elevation,
+              border: Border.all(color: highlight ? context.colors.primary : context.tokens.line, width: highlight ? 2 : 1),
+              boxShadow: highlight
+                  ? [BoxShadow(color: context.colors.primary.withValues(alpha: 0.45), blurRadius: 24)]
+                  : context.tokens.elevation,
             ),
             child: Row(children: [
-              Icon(icon, color: context.tokens.muted),
+              Icon(icon, color: highlight ? context.colors.primary : context.tokens.muted),
               const SizedBox(width: 12),
               Expanded(child: Text(text, style: context.text.titleMedium)),
               Container(

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="shortcut_scan_money">Scan money</string>
+    <string name="shortcut_around_me">What\'s around me</string>
+    <string name="shortcut_voice_command">Voice command</string>
+    <string-array name="feature_scan_money">
+        <item>scan money</item>
+        <item>money</item>
+        <item>read money</item>
+    </string-array>
+    <string-array name="feature_around_me">
+        <item>around me</item>
+        <item>objects</item>
+        <item>surroundings</item>
+    </string-array>
+</resources>

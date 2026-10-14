@@ -3,13 +3,18 @@ import 'package:flutter/material.dart';
 import '../core/app_scope.dart';
 import '../core/currency.dart';
 import '../core/settings.dart';
+import '../core/strings.dart';
+import '../ml/scene_speech.dart';
+import '../services/announcer.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
 /// Settings in WhatsApp / Instagram style: profile card, then grouped rows
 /// with coloured icons and a live summary, each opening its own page.
 class SettingsScreen extends StatelessWidget {
-  const SettingsScreen({super.key});
+  /// Opens the camera to teach a note.
+  final void Function(Note note) onTeach;
+  const SettingsScreen({super.key, required this.onTeach});
 
   @override
   Widget build(BuildContext context) {
@@ -18,6 +23,7 @@ class SettingsScreen extends StatelessWidget {
     return ListenableBuilder(
       listenable: Listenable.merge([s, scope.auth, scope.scan]),
       builder: (context, _) {
+        final L = s.strings;
         final user = scope.auth.currentUser;
         final guest = user == null || user.guest;
         void open(String title, WidgetBuilder body) => Navigator.of(context).push(MaterialPageRoute<void>(
@@ -28,7 +34,7 @@ class SettingsScreen extends StatelessWidget {
           child: ListView(
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 120),
             children: [
-              Semantics(header: true, child: Text('Settings', style: context.text.headlineLarge)),
+              Semantics(header: true, child: Text(L.settings, style: context.text.headlineLarge)),
               const SizedBox(height: 18),
               BentoCard(
                 padding: const EdgeInsets.all(16),
@@ -72,11 +78,18 @@ class SettingsScreen extends StatelessWidget {
                 _NavRow(
                   icon: Icons.record_voice_over_rounded,
                   color: const Color(0xFF10B981),
-                  title: 'Voice & feedback',
+                  title: L.t('Voice & language', 'Sauti na lugha'),
                   summary: s.voiceEnabled
-                      ? '${AppSettings.voiceLanguages[s.voiceLanguage] ?? s.voiceLanguage} · ${s.haptics ? 'Vibration on' : 'No vibration'}'
-                      : 'Voice off',
-                  onTap: () => open('Voice & feedback', (_) => const _VoicePage()),
+                      ? '${appLanguages[s.language]?.$1 ?? s.language} · ${_styleName(L, s.voiceStyle)}'
+                      : L.t('Voice off', 'Sauti imezimwa'),
+                  onTap: () => open(L.t('Voice & language', 'Sauti na lugha'), (_) => const _VoicePage()),
+                ),
+                _NavRow(
+                  icon: Icons.accessibility_new_rounded,
+                  color: const Color(0xFF6366F1),
+                  title: L.t('Voice guide & commands', 'Mwongozo na amri za sauti'),
+                  summary: s.voiceGuide ? L.t('Voice guide on', 'Mwongozo umewashwa') : L.voiceGuideOff,
+                  onTap: () => open(L.t('Voice guide & commands', 'Mwongozo na amri za sauti'), (_) => const _GuidePage()),
                 ),
               ]),
               const SizedBox(height: 14),
@@ -100,11 +113,23 @@ class SettingsScreen extends StatelessWidget {
                   onTap: () => open('Counterfeit check', (_) => const _CounterfeitPage()),
                 ),
                 _NavRow(
-                  icon: Icons.warning_amber_rounded,
+                  icon: Icons.directions_walk_rounded,
                   color: const Color(0xFFEF4444),
-                  title: 'Safety alerts',
-                  summary: s.obstacleAlerts ? 'On · warn ${_closeness(s.obstacleCloseness).toLowerCase()}' : 'Off',
-                  onTap: () => open('Safety alerts', (_) => const _SafetyPage()),
+                  title: L.t('Surroundings', 'Mazingira'),
+                  summary: s.obstacleAlerts
+                      ? L.t('Warn within ${L.metres(s.warnDistance)}', 'Onya ndani ya ${L.metres(s.warnDistance)}')
+                      : L.t('Alerts off', 'Tahadhari zimezimwa'),
+                  onTap: () => open(L.t('Surroundings', 'Mazingira'), (_) => const _SafetyPage()),
+                ),
+                _NavRow(
+                  icon: Icons.school_rounded,
+                  color: const Color(0xFF14B8A6),
+                  title: L.teachNote,
+                  summary: scope.scan.canTeach
+                      ? L.t('${scope.scan.taughtNotes?.examples.length ?? 0} taught',
+                          '${scope.scan.taughtNotes?.examples.length ?? 0} zimefundishwa')
+                      : L.t('Needs the money model', 'Inahitaji modeli ya pesa'),
+                  onTap: () => open(L.teachNote, (_) => _TeachPage(onTeach: onTeach)),
                 ),
               ]),
               const SizedBox(height: 14),
@@ -113,7 +138,7 @@ class SettingsScreen extends StatelessWidget {
                   icon: Icons.info_rounded,
                   color: const Color(0xFF64748B),
                   title: 'About & privacy',
-                  summary: 'Offline · version 0.3.0',
+                  summary: 'Offline · version 0.4.0',
                   onTap: () => open('About & privacy', (_) => const _AboutPage()),
                 ),
               ]),
@@ -131,7 +156,11 @@ class SettingsScreen extends StatelessWidget {
       };
 }
 
-String _closeness(double v) => v < 0.2 ? 'Early' : v < 0.35 ? 'Normal' : 'Only when close';
+String _styleName(S L, VoiceStyle v) => switch (v) {
+      VoiceStyle.woman => L.voiceWoman,
+      VoiceStyle.man => L.voiceMan,
+      VoiceStyle.young => L.voiceYoung,
+    };
 
 // ---------------------------------------------------------------- pages
 
@@ -194,6 +223,7 @@ class _AppearancePage extends StatelessWidget {
                 selected: s.accentColor == c.toARGB32(),
                 label: 'Accent colour ${AppSettings.accentChoices.indexOf(c) + 1}',
                 excludeSemantics: true,
+                onTap: () => s.update((x) => x.accentColor = c.toARGB32()),
                 child: Pressable(
                   onTap: () => s.update((x) => x.accentColor = c.toARGB32()),
                   child: AnimatedContainer(
@@ -260,45 +290,248 @@ class _VoicePage extends StatelessWidget {
   Widget build(BuildContext context) {
     final scope = AppScope.of(context);
     final s = scope.settings;
+    final L = s.strings;
+    final announcer = scope.scan.announcer;
     return Column(children: [
       _Group(children: [
-        _Switch('Speak results', 'Announce notes, verdicts and alerts', s.voiceEnabled,
-            (v) => s.update((x) => x.voiceEnabled = v)),
-        _Slider('Speaking speed', s.speechRate, 0.2, 0.9, (v) => s.update((x) => x.speechRate = v),
-            label: s.speechRate < 0.4 ? 'Slow' : s.speechRate < 0.6 ? 'Normal' : 'Fast'),
-        _Slider('Pitch', s.pitch, 0.6, 1.6, (v) => s.update((x) => x.pitch = v), label: s.pitch.toStringAsFixed(1)),
         _Row(
-          title: 'Voice',
-          child: DropdownButtonFormField<String>(
-            initialValue: s.voiceLanguage,
-            isExpanded: true,
-            borderRadius: BorderRadius.circular(20),
-            items: [
-              for (final e in AppSettings.voiceLanguages.entries)
-                DropdownMenuItem(value: e.key, child: Text(e.value, overflow: TextOverflow.ellipsis)),
+          title: L.chooseLanguage,
+          child: SegmentedButton<String>(
+            showSelectedIcon: false,
+            segments: [
+              for (final e in appLanguages.entries) ButtonSegment(value: e.key, label: Text(e.value.$1)),
             ],
-            onChanged: (v) => s.update((x) => x.voiceLanguage = v ?? x.voiceLanguage),
+            selected: {s.language},
+            onSelectionChanged: (v) {
+              s.update((x) => x
+                ..language = v.first
+                ..voiceName = null);
+              announcer.preview(s.strings.voiceSample);
+            },
           ),
         ),
+        _Row(
+          title: L.chooseVoice,
+          child: SegmentedButton<VoiceStyle>(
+            showSelectedIcon: false,
+            segments: [
+              for (final v in VoiceStyle.values) ButtonSegment(value: v, label: Text(_styleName(L, v))),
+            ],
+            selected: {s.voiceStyle},
+            onSelectionChanged: (v) {
+              s.update((x) => x
+                ..voiceStyle = v.first
+                ..voiceName = null);
+              announcer.preview(L.voiceSample);
+            },
+          ),
+        ),
+        _Row(title: L.t('Exact voice', 'Sauti mahususi'), child: _VoicePicker(key: ValueKey(s.language))),
+        if (announcer.languageMissing)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Text(L.voiceMissing, style: context.text.bodyMedium?.copyWith(color: context.tokens.warning)),
+          ),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 4, 16, 14),
-          child: SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: () => scope.scan.announcer
-                  .say('One thousand Kenyan shillings. This is how I will sound.', dedupe: Duration.zero, force: true),
-              icon: const Icon(Icons.volume_up_rounded),
-              label: const Text('Test voice'),
+          child: Row(children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: () => announcer.preview(L.voiceSample),
+                icon: const Icon(Icons.volume_up_rounded),
+                label: Text(L.t('Test voice', 'Jaribu sauti')),
+              ),
             ),
-          ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: announcer.openVoiceSettings,
+                icon: const Icon(Icons.download_rounded),
+                label: Text(L.t('More voices', 'Sauti zaidi')),
+              ),
+            ),
+          ]),
         ),
       ]),
       const SizedBox(height: 14),
       _Group(children: [
-        _Switch('Vibration', 'Feel a pulse for results and warnings', s.haptics, (v) => s.update((x) => x.haptics = v)),
-        _Switch('Announce running total', 'Say the wallet total after "Add"', s.announceTotals,
+        _Switch(L.t('Speak results', 'Ongea majibu'), L.t('Announce money, warnings and results', 'Tangaza pesa, tahadhari na majibu'),
+            s.voiceEnabled, (v) => s.update((x) => x.voiceEnabled = v)),
+        _Slider(L.speechSpeed, s.speechRate, 0.2, 0.9, (v) => s.update((x) => x.speechRate = v),
+            label: s.speechRate < 0.4
+                ? L.t('Slow', 'Polepole')
+                : s.speechRate < 0.6
+                    ? L.t('Normal', 'Kawaida')
+                    : L.t('Fast', 'Haraka')),
+        _Slider(L.t('Pitch', 'Kina cha sauti'), s.pitch, 0.6, 1.6, (v) => s.update((x) => x.pitch = v),
+            label: s.pitch.toStringAsFixed(1)),
+      ]),
+      const SizedBox(height: 14),
+      _Group(children: [
+        _Switch(L.t('Vibration', 'Mtetemo'), L.t('Feel a pulse for results and warnings', 'Hisi mtetemo kwa majibu na tahadhari'),
+            s.haptics, (v) => s.update((x) => x.haptics = v)),
+        _Switch(L.t('Announce running total', 'Tangaza jumla'),
+            L.t('Say the wallet total after "Add"', 'Sema jumla baada ya "Ongeza"'), s.announceTotals,
             (v) => s.update((x) => x.announceTotals = v)),
       ]),
+    ]);
+  }
+}
+
+/// Every voice for the chosen language, with a sample on select.
+class _VoicePicker extends StatefulWidget {
+  const _VoicePicker({super.key});
+
+  @override
+  State<_VoicePicker> createState() => _VoicePickerState();
+}
+
+class _VoicePickerState extends State<_VoicePicker> {
+  Future<List<TtsVoice>>? _voices;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _voices ??= AppScope.of(context).scan.announcer.voices();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scope = AppScope.of(context);
+    final s = scope.settings;
+    final L = s.strings;
+    return FutureBuilder<List<TtsVoice>>(
+      future: _voices,
+      builder: (context, snap) {
+        if (snap.connectionState != ConnectionState.done) return const LinearProgressIndicator();
+        final list = snap.data ?? const <TtsVoice>[];
+        if (list.isEmpty) {
+          return Text(L.voiceMissing, style: context.text.bodyMedium?.copyWith(color: context.tokens.muted));
+        }
+        String name(TtsVoice v, int i) {
+          final g = switch (v.gender) {
+            VoiceGender.female => L.voiceWoman,
+            VoiceGender.male => L.voiceMan,
+            VoiceGender.unknown => L.t('Voice', 'Sauti'),
+          };
+          return '$g ${i + 1} · ${v.locale}${v.installed ? '' : L.t(' (download)', ' (pakua)')}';
+        }
+
+        return DropdownButtonFormField<String>(
+          initialValue: list.any((v) => v.name == s.voiceName) ? s.voiceName : '',
+          isExpanded: true,
+          borderRadius: BorderRadius.circular(20),
+          items: [
+            DropdownMenuItem(value: '', child: Text(L.t('Automatic', 'Kiotomatiki'))),
+            for (var i = 0; i < list.length; i++)
+              DropdownMenuItem(value: list[i].name, child: Text(name(list[i], i), overflow: TextOverflow.ellipsis)),
+          ],
+          onChanged: (v) {
+            s.update((x) => x.voiceName = (v == null || v.isEmpty) ? null : v);
+            scope.scan.announcer.preview(L.voiceSample);
+          },
+        );
+      },
+    );
+  }
+}
+
+class _GuidePage extends StatelessWidget {
+  const _GuidePage();
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppScope.of(context).settings;
+    final L = s.strings;
+    return Column(children: [
+      _Group(children: [
+        _Switch(
+            L.t('Voice guide', 'Mwongozo wa sauti'),
+            L.t('Touch to hear, double tap to choose. Off while TalkBack is on.',
+                'Gusa kusikia, gusa mara mbili kuchagua. Huzimwa TalkBack ikiwa imewashwa.'),
+            s.voiceGuide,
+            (v) => s.update((x) => x.voiceGuide = v)),
+        _Switch(L.t('Listen when the app opens', 'Sikiliza programu ikifunguka'),
+            L.t('Ready for a voice command right away', 'Tayari kwa amri ya sauti mara moja'), s.listenOnOpen,
+            (v) => s.update((x) => x.listenOnOpen = v)),
+        _Switch(
+            L.t('Show pop-up alerts', 'Onyesha arifa za skrini'),
+            L.t('For sighted helpers. Voice and vibration always work.',
+                'Kwa wasaidizi wanaoona. Sauti na mtetemo hufanya kazi kila wakati.'),
+            s.showAlertBanners,
+            (v) => s.update((x) => x.showAlertBanners = v)),
+      ]),
+      const SizedBox(height: 14),
+      BentoCard(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(L.t('Voice commands', 'Amri za sauti'), style: context.text.titleMedium),
+          const SizedBox(height: 8),
+          Text(L.commandsHelp, style: context.text.bodyMedium?.copyWith(color: context.tokens.muted)),
+          const SizedBox(height: 8),
+          Text(
+              L.t('Press and hold anywhere to speak. From outside the app, say "Hey Google, open NoteLens", '
+                  'or press and hold the NoteLens icon for shortcuts.',
+                  'Bonyeza na ushikilie popote kuongea. Nje ya programu, sema "Hey Google, open NoteLens", '
+                  'au bonyeza na ushikilie ikoni ya NoteLens kupata njia za mkato.'),
+              style: context.text.bodyMedium?.copyWith(color: context.tokens.muted)),
+        ]),
+      ),
+    ]);
+  }
+}
+
+class _TeachPage extends StatelessWidget {
+  final void Function(Note note) onTeach;
+  const _TeachPage({required this.onTeach});
+
+  @override
+  Widget build(BuildContext context) {
+    final scope = AppScope.of(context);
+    final s = scope.settings;
+    final L = s.strings;
+    final taught = scope.scan.taughtNotes;
+    final items = [
+      for (final c in currencyCatalog)
+        if (s.enabledCurrencies.contains(c.iso)) ...[
+          for (final v in c.notes) Note(c.iso, v),
+          for (final v in c.coins) Note.parse('${c.iso}_${v}_coin')!,
+        ],
+    ];
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      BentoCard(child: Text(L.teachIntro, style: context.text.bodyMedium)),
+      const SizedBox(height: 14),
+      if (!scope.scan.canTeach)
+        BentoCard(
+          color: context.tokens.warning.withValues(alpha: 0.14),
+          child: Text(L.t('Teaching needs the money model, which is not installed in this build.',
+              'Kufundisha kunahitaji modeli ya pesa, ambayo haijasakinishwa.')),
+        )
+      else
+        _Group(children: [
+          for (final n in items)
+            ListTile(
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+              leading: Text(currencyInfo(n.currency)?.flag ?? '', style: const TextStyle(fontSize: 24)),
+              title: Text(n.spokenIn(L), style: context.text.titleMedium),
+              subtitle: Text(
+                  (taught?.count(n.label) ?? 0) > 0 ? L.taught(taught!.count(n.label)) : L.t('Not taught', 'Haijafundishwa'),
+                  style: context.text.bodyMedium?.copyWith(color: context.tokens.muted)),
+              trailing: (taught?.count(n.label) ?? 0) > 0
+                  ? IconButton(
+                      tooltip: L.t('Forget', 'Sahau'),
+                      icon: const Icon(Icons.delete_outline_rounded),
+                      onPressed: () async {
+                        await taught!.remove(n.label);
+                        s.update((_) {}); // refresh the list
+                      },
+                    )
+                  : const Icon(Icons.chevron_right_rounded),
+              onTap: () {
+                Navigator.of(context).popUntil((r) => r.isFirst);
+                onTeach(n);
+              },
+            ),
+        ]),
     ]);
   }
 }
@@ -341,7 +574,7 @@ class _MoneyPage extends StatelessWidget {
             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
             secondary: Text(c.flag, style: const TextStyle(fontSize: 28)),
             title: Text(currencyName(c.iso), style: context.text.titleMedium),
-            subtitle: Text('${c.notes.length} notes · ${c.symbol}',
+            subtitle: Text('${c.notes.length} notes · ${c.coins.length} coins · ${c.symbol}',
                 style: context.text.bodyMedium?.copyWith(color: context.tokens.muted)),
             value: s.enabledCurrencies.contains(c.iso),
             onChanged: (on) => s.update((x) {
@@ -390,11 +623,57 @@ class _SafetyPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = AppScope.of(context).settings;
-    return _Group(children: [
-      _Switch('Obstacle alerts', 'Warn about people, vehicles and objects in your path', s.obstacleAlerts,
-          (v) => s.update((x) => x.obstacleAlerts = v)),
-      _Slider('Warn me', s.obstacleCloseness, 0.1, 0.5, (v) => s.update((x) => x.obstacleCloseness = v),
-          label: _closeness(s.obstacleCloseness)),
+    final L = s.strings;
+    return Column(children: [
+      _Group(children: [
+        _Switch(
+            L.t('Obstacle alerts', 'Tahadhari za vizuizi'),
+            L.t('Warn early about people, vehicles and things in your path',
+                'Onya mapema kuhusu watu, magari na vitu njiani'),
+            s.obstacleAlerts,
+            (v) => s.update((x) => x.obstacleAlerts = v)),
+        _Slider(L.t('Warn me from', 'Nionye kuanzia'), s.warnDistance, 1.5, 6,
+            (v) => s.update((x) => x.warnDistance = v),
+            label: L.metres(s.warnDistance)),
+        _Switch(
+            L.t('Proximity vibration', 'Mtetemo wa ukaribu'),
+            L.t('Pulses faster as something in your path gets closer', 'Hutetemeka haraka kitu kikikaribia njiani'),
+            s.proximityVibration,
+            (v) => s.update((x) => x.proximityVibration = v)),
+        _Switch(
+            L.t('Money while walking', 'Pesa ukitembea'),
+            L.t('Also announce notes and coins in Objects mode', 'Tangaza noti na sarafu pia katika hali ya vitu'),
+            s.notesInObjectsMode,
+            (v) => s.update((x) => x.notesInObjectsMode = v)),
+      ]),
+      const SizedBox(height: 14),
+      _Group(children: [
+        _Row(
+          title: L.t('Distances in', 'Umbali kwa'),
+          child: SegmentedButton<DistanceUnit>(
+            showSelectedIcon: false,
+            segments: [
+              ButtonSegment(value: DistanceUnit.metres, label: Text(L.t('Metres', 'Mita'))),
+              ButtonSegment(value: DistanceUnit.steps, label: Text(L.t('Steps', 'Hatua'))),
+              ButtonSegment(value: DistanceUnit.none, label: Text(L.t('None', 'Hapana'))),
+            ],
+            selected: {s.distanceUnit},
+            onSelectionChanged: (v) => s.update((x) => x.distanceUnit = v.first),
+          ),
+        ),
+        _Row(
+          title: L.t('Directions', 'Mwelekeo'),
+          child: SegmentedButton<DirectionStyle>(
+            showSelectedIcon: false,
+            segments: [
+              ButtonSegment(value: DirectionStyle.simple, label: Text(L.t('Left / right', 'Kushoto / kulia'))),
+              ButtonSegment(value: DirectionStyle.clock, label: Text(L.t('Clock face', 'Saa'))),
+            ],
+            selected: {s.directionStyle},
+            onSelectionChanged: (v) => s.update((x) => x.directionStyle = v.first),
+          ),
+        ),
+      ]),
     ]);
   }
 }
@@ -410,7 +689,7 @@ class _AboutPage extends StatelessWidget {
       _Info('Object model', scan.hasDetector ? 'EfficientDet-Lite2 · 80 objects' : 'Not installed'),
       _Info('Scene model', scan.hasSceneClassifier ? 'EfficientNet-Lite0 · 1000 things' : 'Not installed'),
       const _Info('Privacy', 'Works offline. Images never leave the phone.'),
-      const _Info('Version', '0.3.0'),
+      const _Info('Version', '0.4.0'),
     ]);
   }
 }
@@ -446,6 +725,7 @@ class _NavRow extends StatelessWidget {
         button: true,
         label: '$title. $summary',
         excludeSemantics: true,
+        onTap: onTap,
         child: InkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(20),

@@ -177,7 +177,7 @@ class S {
       // Swahili time starts at 6 am: 7 am is "saa moja".
       final sw = ((h + 6) % 12 == 0) ? 12 : (h + 6) % 12;
       final part = h < 12 ? 'asubuhi' : h < 16 ? 'mchana' : h < 19 ? 'jioni' : 'usiku';
-      return 'Ni saa $sw na dakika $m $part.';
+      return m == 0 ? 'Ni saa $sw $part.' : 'Ni saa $sw na dakika $m $part.';
     }
     final h12 = h % 12 == 0 ? 12 : h % 12;
     return 'It is $h12:$mm ${h < 12 ? 'AM' : 'PM'}.';

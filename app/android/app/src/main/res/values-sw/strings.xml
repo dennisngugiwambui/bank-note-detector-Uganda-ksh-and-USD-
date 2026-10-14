@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="shortcut_scan_money">Soma pesa</string>
+    <string name="shortcut_around_me">Nini kiko karibu nami</string>
+    <string name="shortcut_voice_command">Amri ya sauti</string>
+</resources>

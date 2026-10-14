@@ -107,10 +107,13 @@ class VoiceCommands extends ChangeNotifier {
     notifyListeners();
     try {
       await _stt.listen(
-        localeId: localeId,
-        listenFor: const Duration(seconds: 7),
-        pauseFor: const Duration(seconds: 2),
-        listenOptions: SpeechListenOptions(partialResults: true, cancelOnError: true),
+        listenOptions: SpeechListenOptions(
+          localeId: localeId,
+          listenFor: const Duration(seconds: 7),
+          pauseFor: const Duration(seconds: 2),
+          partialResults: true,
+          cancelOnError: true,
+        ),
         onResult: (SpeechRecognitionResult r) {
           heard = r.recognizedWords;
           notifyListeners();

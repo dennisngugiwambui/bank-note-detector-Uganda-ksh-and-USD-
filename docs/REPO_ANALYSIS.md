@@ -85,3 +85,27 @@ The UI follows the current fintech/"bento" style seen in those templates: rounde
 | Deprecated Flutter plugin | `tflite_flutter` + `camera` + `flutter_tts` |
 | Counterfeit not handled | Per-currency print / backlight / UV models + manual checks (`docs/COUNTERFEIT_DETECTION.md`) |
 | GPL code in a resale product | Clean-room re-implementation of the 3-lighting method |
+
+## 9. Assistive-navigation repos (second review)
+
+These five repos were reviewed for their architecture and for training data or weights that could make NoteLens more accurate.
+
+| Repo | What it is | Reusable data or weights? |
+|---|---|---|
+| rajshekarm/Smart-Real-Time-Multimodal-Assistance-System | Real-time detection + speech assistant | No custom dataset. Ideas kept: priority classes, cooldowns, speak only on change |
+| shrijayan/Vision-Assistance | Camera assistant with spoken output | No custom dataset |
+| UzaifTalpur/Smart-Glasses-For-Visually-Impaired | Raspberry Pi + TensorFlow Lite + OpenCV glasses with audio feedback | Stock COCO model only |
+| jayjmha/Assistance-System-for-the-Blind-using-Object-Detection | Jetson Nano, YOLOv7 fine-tuned on a custom pedestrian dataset, TensorRT, auditory guidance | GPL, and the dataset is Korean street scenes. Not usable in a closed app that is sold |
+| harshgondaliya/Multi-feature-Smart-Stick-for-Blind | Arduino stick: ultrasonic obstacle sensing, water sensing, stick finder | No ML |
+
+None of them has data that would make the money model or the object detector more accurate on Kenyan or Ugandan streets. Their useful ideas were re-implemented, and two problems found in field testing were fixed at the root:
+
+| Field problem | Cause | Fix |
+|---|---|---|
+| "A car in front was said to be on my left" | Direction came from the raw camera frame, so holding the phone sideways swapped the axes. A label was spoken once and then not updated | Boxes are rotated by the accelerometer pose before computing the bearing. Bearing comes from the camera field of view, in degrees (`scene_tracker.dart`, `orient`) |
+| "It tells me when I am already there" | Alerts fired on box size alone, every 600 ms. A fresh isolate was spawned per frame | Distance from known object heights + camera tilt; **time to contact** from the growth rate of the box (regression of ln height over 1.6 s); alerts at TTC < 3.5 s (any obstacle in the walking corridor) or < 5 s (vehicles). Frames are processed back to back through one persistent worker isolate (`frame_worker.dart`) |
+| A pen read as "knife", a desk as "dining table, very close" | Single-frame detections, low thresholds, camera pointed down | A track must be seen twice (or be > 0.7). Thresholds per class. No hazards while the phone points at the floor, and large surfaces are ignored |
+| Money not announced in Objects mode | Separate modes | The money model also runs on every 2nd frame in Objects mode, with a stricter vote (≥ 0.92, 5 of 6) |
+| Text pop-ups useless to blind users | | Pop-ups are off by default. Everything is spoken, with vibration patterns, and proximity pulses speed up as an obstacle nears |
+
+Money model v2 adds coins (KES, INR, EGP, USD), Kenyan 2019-series and Ugandan 2010-series notes, and an embedding output so users can **teach** a note on the phone (`TaughtNotes`, cosine k-NN). Data and licences: `docs/MODEL_DATA_LICENSES.md`.

@@ -30,7 +30,14 @@ class TfliteRunner:
         self.interp = tf.lite.Interpreter(model_path=path, num_threads=4)
         self.interp.allocate_tensors()
         self.inp = self.interp.get_input_details()[0]
-        self.out = self.interp.get_output_details()[0]
+        outs = self.interp.get_output_details()
+        # Models with a second "features" output: the probabilities are the
+        # output that sums to 1, which is not always the first one.
+        self.out = outs[0]
+        if len(outs) > 1:
+            self.interp.set_tensor(self.inp["index"], np.zeros(self.inp["shape"], self.inp["dtype"]))
+            self.interp.invoke()
+            self.out = min(outs, key=lambda o: abs(float(self.interp.get_tensor(o["index"]).sum()) - 1.0))
         self.size = int(self.inp["shape"][1])
 
     def __call__(self, img: np.ndarray) -> np.ndarray:

@@ -95,25 +95,3 @@ class ObjectDetector {
 
   void close() => _model.close();
 }
-
-/// Builds a short spoken scene description, such as "person ahead, close.
-/// Chair on your left."
-/// [sceneGuess] is the ImageNet classifier's answer, for things COCO does not
-/// know (shoes, clothes, windows...).
-String describeScene(List<Detection> detections, {int maxItems = 3, String? sceneGuess}) {
-  if (detections.isEmpty) return sceneGuess == null ? nothingRecognized : 'Looks like $sceneGuess';
-  final seen = <String>{};
-  final parts = <String>[];
-  for (final d in detections) {
-    if (!seen.add(d.label)) continue;
-    final where = d.centerX < 0.33 ? 'on your left' : d.centerX > 0.66 ? 'on your right' : 'ahead';
-    parts.add('${d.label} $where${d.area > 0.35 ? ', close' : ''}');
-    if (parts.length == maxItems) break;
-  }
-  if (sceneGuess != null && parts.length < maxItems && !seen.contains(sceneGuess)) {
-    parts.add('looks like $sceneGuess');
-  }
-  return parts.join('. ');
-}
-
-const nothingRecognized = 'Nothing recognized';

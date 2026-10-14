@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Long-press the NoteLens icon (or ask Google Assistant) to jump straight
+     into a task. MainActivity reads the "action" extra and passes it to Dart. -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <capability android:name="actions.intent.OPEN_APP_FEATURE">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.banknote.banknote_identifier"
+            android:targetClass="com.banknote.banknote_identifier.MainActivity">
+            <parameter android:name="feature" android:key="feature" />
+        </intent>
+    </capability>
+    <shortcut
+        android:shortcutId="scan_money"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_scan_money"
+        android:shortcutLongLabel="@string/shortcut_scan_money">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.banknote.banknote_identifier"
+            android:targetClass="com.banknote.banknote_identifier.MainActivity">
+            <extra android:name="action" android:value="scan_money" />
+        </intent>
+        <capability-binding android:key="actions.intent.OPEN_APP_FEATURE">
+            <parameter-binding android:key="feature" android:value="@array/feature_scan_money" />
+        </capability-binding>
+    </shortcut>
+    <shortcut
+        android:shortcutId="around_me"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_around_me"
+        android:shortcutLongLabel="@string/shortcut_around_me">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.banknote.banknote_identifier"
+            android:targetClass="com.banknote.banknote_identifier.MainActivity">
+            <extra android:name="action" android:value="around_me" />
+        </intent>
+        <capability-binding android:key="actions.intent.OPEN_APP_FEATURE">
+            <parameter-binding android:key="feature" android:value="@array/feature_around_me" />
+        </capability-binding>
+    </shortcut>
+    <shortcut
+        android:shortcutId="voice_command"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_voice_command"
+        android:shortcutLongLabel="@string/shortcut_voice_command">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.banknote.banknote_identifier"
+            android:targetClass="com.banknote.banknote_identifier.MainActivity">
+            <extra android:name="action" android:value="voice_command" />
+        </intent>
+    </shortcut>
+</shortcuts>

@@ -54,12 +54,20 @@ cd training
 python -m venv .venv; .\.venv\Scripts\activate
 pip install -r requirements.txt
 python smoke_test.py                        # optional: checks the whole pipeline in ~10 min
-copy sources.example.yaml sources.yaml      # then edit the roots and mappings
-python prepare_dataset.py --sources sources.yaml --out data/unified --composites-per-class 300
-python train_classifier.py --data data/unified --out runs/v1
-python export_tflite.py --run runs/v1 --data data/unified --android-assets ../app/assets/currency
-python evaluate_tflite.py --model runs/v1/model_int8.tflite --data data/unified
+# sources.yaml lists every dataset used for model v2 (notes + coins), with licences.
+# Put your own phone photos in raw/own_photos/<label>/ (e.g. KES_100, KES_20_coin).
+python prepare_dataset.py --sources sources.yaml --out data/v2 --composites-per-class 100 `
+  --composites-min-total 380 --background-dir raw/x/rooms/kaggle_room_street_data/house_data
+python train_classifier.py --data data/v2 --out runs/v2
+python export_tflite.py --run runs/v2 --data data/v2 --android-assets ../app/assets/currency
+python evaluate_tflite.py --model runs/v2/model_int8.tflite --data data/v2
 ```
+Labels: `KES_100` (note), `KES_20_coin` (coin), `USD_25c_coin` (cents), `background`.
+The exported model has a second output (an embedding) that powers
+**Settings → Teach a note**: a helper shows the phone a note or coin for about
+6 seconds and NoteLens recognises it from then on, even one the model was
+never trained on. Data sources and which ones may be used in a paid release:
+`docs/MODEL_DATA_LICENSES.md`.
 The sweep prints the lowest threshold with precision ≥ 0.99. Set it as the
 default `sensitivity` in `app/lib/core/settings.dart` (users can still change
 it under Settings → "Certainty before speaking").

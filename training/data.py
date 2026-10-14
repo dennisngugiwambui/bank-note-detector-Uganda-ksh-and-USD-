@@ -103,4 +103,8 @@ def make_dataset(paths, ys, num_classes, batch, training, size=IMG_SIZE, seed=0)
         ds = ds.map(lambda x, y: (tf.clip_by_value(aug(x, training=True), 0.0, 255.0), y),
                     num_parallel_calls=AUTOTUNE)
     ds = ds.map(lambda x, y: (x, tf.one_hot(y, num_classes)), num_parallel_calls=AUTOTUNE)
-    return ds.prefetch(AUTOTUNE)
+    # Cap the pipeline's buffers: on a 32 GB PC, unbounded autotuning plus
+    # other programs ran the machine out of memory mid-training.
+    opts = tf.data.Options()
+    opts.autotune.ram_budget = 2 * 1024**3
+    return ds.prefetch(4).with_options(opts)

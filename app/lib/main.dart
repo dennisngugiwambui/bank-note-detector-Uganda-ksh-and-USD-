@@ -10,6 +10,7 @@ import 'ui/auth_screen.dart';
 import 'ui/onboarding_screen.dart';
 import 'ui/shell.dart';
 import 'ui/theme.dart';
+import 'ui/voice_guide.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -47,7 +48,12 @@ class BanknoteApp extends StatelessWidget {
             data: MediaQuery.of(context).copyWith(
               textScaler: TextScaler.linear(MediaQuery.textScalerOf(context).scale(1) * s.textScale),
             ),
-            child: child!,
+            child: VoiceGuide(
+              enabled: s.voiceGuide,
+              announcer: scope.scan.announcer,
+              strings: () => s.strings,
+              child: child!,
+            ),
           ),
           home: AnimatedSwitcher(
             duration: const Duration(milliseconds: 400),

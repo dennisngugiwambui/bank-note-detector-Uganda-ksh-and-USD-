@@ -63,6 +63,7 @@ class AppSettings extends ChangeNotifier {
 
   // Lifecycle
   bool onboardingDone = false;
+  bool guideIntroduced = false; // the voice guide's gestures were explained once
 
   S get strings => S(language);
   String get ttsLocale => appLanguages[language]?.$2 ?? 'en-US';
@@ -107,6 +108,7 @@ class AppSettings extends ChangeNotifier {
     uvLampAvailable = p.getBool('uvLampAvailable') ?? uvLampAvailable;
     backlightStep = p.getBool('backlightStep') ?? backlightStep;
     onboardingDone = p.getBool('onboardingDone') ?? onboardingDone;
+    guideIntroduced = p.getBool('guideIntroduced') ?? guideIntroduced;
   }
 
   void _save(void Function() change) {
@@ -140,6 +142,7 @@ class AppSettings extends ChangeNotifier {
     p.setBool('uvLampAvailable', uvLampAvailable);
     p.setBool('backlightStep', backlightStep);
     p.setBool('onboardingDone', onboardingDone);
+    p.setBool('guideIntroduced', guideIntroduced);
     notifyListeners();
   }
 
