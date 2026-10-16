@@ -3,11 +3,13 @@ import 'package:flutter/material.dart';
 
 import '../core/app_scope.dart';
 import '../core/currency.dart';
+import '../core/note_facts.dart';
 import '../ml/authenticity_checker.dart';
 import '../ml/scene_speech.dart';
 import '../ml/scene_tracker.dart';
 import '../scan_controller.dart';
 import '../services/command_center.dart';
+import 'model_loading_card.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -473,9 +475,12 @@ class _Caption extends StatelessWidget {
     final money = scan.mode == ScanMode.currency;
     final note = scan.lastNote;
     final showNote = note != null &&
-        (scan.status == note.spokenIn(scan.s) || scan.status == scan.s.banknoteFound(note.spokenIn(scan.s)));
+        (scan.status.startsWith(note.spokenIn(scan.s)) ||
+            scan.status.startsWith(scan.s.banknoteFound(note.spokenIn(scan.s))));
+    final fact = note == null ? null : factFor(note);
 
-    if (money && scan.modelsLoaded && !scan.hasCurrencyModel) return const _ModelMissing();
+    if (money && !scan.modelsLoaded) return const ModelLoadingCard(compact: true);
+    if (money && !scan.hasCurrencyModel) return const _ModelMissing();
 
     return Semantics(
       liveRegion: true,
@@ -504,6 +509,36 @@ class _Caption extends StatelessWidget {
                 child: Text(formatAmount(note.currency, note.value),
                     style: context.text.displayMedium?.copyWith(color: Colors.white, shadows: _shadow)),
               ),
+              if (fact != null && scan.settings.noteFeatures)
+                Semantics(
+                  button: true,
+                  onTapHint: scan.s.t('hear more about this note', 'sikia zaidi kuhusu noti hii'),
+                  child: GestureDetector(
+                    onTap: scan.describeNote,
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                        if (fact.colour != null)
+                          Container(
+                            width: 14,
+                            height: 14,
+                            margin: const EdgeInsets.only(right: 8),
+                            decoration: BoxDecoration(
+                                color: Color(fact.colour!),
+                                shape: BoxShape.circle,
+                                border: Border.all(color: Colors.white70, width: 1.5)),
+                          ),
+                        Flexible(
+                          child: Text(fact.brief(scan.s),
+                              style: context.text.titleMedium
+                                  ?.copyWith(color: Colors.white, fontWeight: FontWeight.w700, shadows: _shadow)),
+                        ),
+                        const SizedBox(width: 6),
+                        const Icon(Icons.info_outline_rounded, color: Colors.white70, size: 18),
+                      ]),
+                    ),
+                  ),
+                ),
             ] else
               Text(scan.status,
                   maxLines: 3,
@@ -607,11 +642,10 @@ class _ModelMissing extends StatelessWidget {
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Icon(Icons.info_rounded, color: context.colors.primary),
           const SizedBox(width: 12),
-          const Expanded(
+          Expanded(
             child: Text(
-              'Money recognition is not installed in this build yet. Objects mode and the manual counterfeit checks '
-              'work now.',
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, height: 1.35),
+              AppScope.of(context).settings.strings.modelMissing,
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, height: 1.35),
             ),
           ),
         ]),

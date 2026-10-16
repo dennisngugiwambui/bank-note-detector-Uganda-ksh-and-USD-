@@ -7,6 +7,7 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 
 import 'core/activity.dart';
 import 'core/currency.dart';
+import 'core/note_facts.dart';
 import 'core/settings.dart';
 import 'core/strings.dart';
 import 'ml/authenticity_checker.dart';
@@ -21,6 +22,18 @@ import 'services/announcer.dart';
 import 'services/pose_sensor.dart';
 
 enum ScanMode { currency, scene }
+
+enum ModelPart { money, objects, scene, tools }
+
+/// How far the models are from ready.
+class LoadProgress {
+  final double progress; // 0..1
+  final int secondsLeft;
+  final Set<ModelPart> finished;
+  final bool done;
+  const LoadProgress({this.progress = 0, this.secondsLeft = 4, this.finished = const {}, this.done = false});
+  int get percent => (progress * 100).round().clamp(0, 100);
+}
 
 enum AuthPhase { idle, instructing, capturing, analysing, done }
 
@@ -63,6 +76,7 @@ class ScanController extends ChangeNotifier {
   String status = '';
   String? hint;
   Note? lastNote;
+  Note? lastSeen; // kept after "add" clears lastNote, for "details"
   double lastConfidence = 0;
   List<Tracked> tracked = const [];
   String? sceneGuess; // ImageNet fallback, e.g. "shoes"
@@ -106,22 +120,70 @@ class ScanController extends ChangeNotifier {
   bool get hasSceneClassifier => _scene != null;
   bool get authRunning => authPhase != AuthPhase.idle && authPhase != AuthPhase.done;
 
-  Future<void> loadModels() async {
-    if (modelsLoaded) return;
+  /// Start-up progress of the on-device models, shown by [ModelLoadingCard]
+  /// and announced when it takes more than a moment.
+  final ValueNotifier<LoadProgress> loading = ValueNotifier(const LoadProgress());
+  Future<void>? _loadingModels;
+
+  Future<void> loadModels() => _loadingModels ??= _loadModels();
+
+  Future<void> _loadModels() async {
     await announcer.init();
+    final clock = Stopwatch()..start();
+    var done = 0.0;
+    final finished = <ModelPart>{};
+    // Weights follow the model sizes, so the bar moves at an even pace.
+    const weights = {ModelPart.money: 0.35, ModelPart.objects: 0.4, ModelPart.scene: 0.2, ModelPart.tools: 0.05};
+    void publish({bool complete = false}) {
+      final secs = clock.elapsedMilliseconds / 1000;
+      // Until something finishes, assume a typical 4 s start; then use the real rate.
+      final eta = complete ? 0.0 : (done < 0.05 ? (4 - secs).clamp(1, 4) : secs * (1 - done) / done);
+      loading.value = LoadProgress(
+          progress: complete ? 1 : done, secondsLeft: eta.ceil(), finished: {...finished}, done: complete);
+    }
+
+    Future<T> track<T>(ModelPart part, Future<T> f) => f.then((v) {
+          done += weights[part]!;
+          finished.add(part);
+          publish();
+          return v;
+        });
+
+    publish();
+    // Speak only if the start is slow, so a quick start stays quiet.
+    final slow = Timer(const Duration(milliseconds: 1500), () {
+      if (!loading.value.done) {
+        announcer.say(s.gettingReady(loading.value.secondsLeft), priority: Priority.normal);
+      }
+    });
+    // Smooth the bar between finished models, never past the next one.
+    final creep = Timer.periodic(const Duration(milliseconds: 120), (_) {
+      final v = loading.value;
+      if (v.done) return;
+      final cap = (done + 0.9 * (1 - done) * 0.5).clamp(0.0, 0.97);
+      if (v.progress < cap) {
+        loading.value = LoadProgress(
+            progress: v.progress + (cap - v.progress) * 0.08,
+            secondsLeft: v.secondsLeft,
+            finished: v.finished);
+      }
+    });
     final loaded = await Future.wait<Object?>([
-      CurrencyClassifier.load(),
-      ObjectDetector.load(),
-      AuthenticityChecker.load(),
-      SceneClassifier.load(),
-      FrameWorker.start(),
+      track(ModelPart.money, CurrencyClassifier.load()),
+      track(ModelPart.objects, ObjectDetector.load()),
+      track(ModelPart.tools, Future.wait([AuthenticityChecker.load(), FrameWorker.start()])),
+      track(ModelPart.scene, SceneClassifier.load()),
     ]);
+    slow.cancel();
+    creep.cancel();
     _classifier = loaded[0] as CurrencyClassifier?;
     _detector = loaded[1] as ObjectDetector?;
-    authenticity = loaded[2] as AuthenticityChecker;
+    final tools = loaded[2] as List<Object>;
+    authenticity = tools[0] as AuthenticityChecker;
+    _worker = tools[1] as FrameWorker;
     _scene = loaded[3] as SceneClassifier?;
-    _worker = loaded[4] as FrameWorker;
     modelsLoaded = true;
+    publish(complete: true);
     notifyListeners();
   }
 
@@ -243,9 +305,12 @@ class ScanController extends ChangeNotifier {
 
   void _announceNote(Note note, double confidence, {bool inObjectsMode = false}) {
     lastNote = note;
+    lastSeen = note;
     final spoken = note.spokenIn(s);
     announcer.buzz(Buzz.success);
-    final text = inObjectsMode ? s.banknoteFound(spoken) : spoken;
+    final brief = settings.noteFeatures ? briefFor(note, s) : null;
+    final named = inObjectsMode ? s.banknoteFound(spoken) : spoken;
+    final text = brief == null ? named : '$named. $brief.';
     status = text;
     notifyListeners();
     announcer.say(text, priority: inObjectsMode ? Priority.high : Priority.normal, dedupe: Duration.zero);
@@ -458,6 +523,17 @@ class ScanController extends ChangeNotifier {
   void repeatLast() {
     final text = status.isEmpty ? (mode == ScanMode.currency ? s.pointAtNote : s.describing) : status;
     announcer.say(text, priority: Priority.urgent, dedupe: Duration.zero);
+  }
+
+  /// Reads everything known about the last note: colour, animal, pictures
+  /// and what to feel for.
+  void describeNote() {
+    final note = lastSeen;
+    if (note == null) {
+      announcer.say(s.noNoteYet, priority: Priority.high);
+      return;
+    }
+    announcer.say(detailsFor(note, s), priority: Priority.urgent, dedupe: Duration.zero);
   }
 
   /// Describes the surroundings right now, whatever changed.

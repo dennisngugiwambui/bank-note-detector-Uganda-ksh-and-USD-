@@ -38,23 +38,23 @@ class _PressableState extends State<Pressable> {
 
   @override
   Widget build(BuildContext context) => GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTapDown: (_) => _set(true),
-        onTapUp: (_) => _set(false),
-        onTapCancel: () => _set(false),
-        onTap: widget.onTap == null
-            ? null
-            : () {
-                HapticFeedback.selectionClick();
-                widget.onTap!();
-              },
-        child: AnimatedScale(
-          scale: _down ? widget.pressedScale : 1,
-          duration: const Duration(milliseconds: 120),
-          curve: Curves.easeOut,
-          child: widget.child,
-        ),
-      );
+    behavior: HitTestBehavior.opaque,
+    onTapDown: (_) => _set(true),
+    onTapUp: (_) => _set(false),
+    onTapCancel: () => _set(false),
+    onTap: widget.onTap == null
+        ? null
+        : () {
+            HapticFeedback.selectionClick();
+            widget.onTap!();
+          },
+    child: AnimatedScale(
+      scale: _down ? widget.pressedScale : 1,
+      duration: const Duration(milliseconds: 120),
+      curve: Curves.easeOut,
+      child: widget.child,
+    ),
+  );
 }
 
 /// Fades and slides its child in once, after [delay]. Used for staggered
@@ -95,7 +95,10 @@ class _FadeSlideInState extends State<FadeSlideIn> with SingleTickerProviderStat
     if (MediaQuery.disableAnimationsOf(context)) return widget.child;
     return FadeTransition(
       opacity: _a,
-      child: SlideTransition(position: Tween(begin: widget.from, end: Offset.zero).animate(_a), child: widget.child),
+      child: SlideTransition(
+        position: Tween(begin: widget.from, end: Offset.zero).animate(_a),
+        child: widget.child,
+      ),
     );
   }
 }
@@ -164,12 +167,16 @@ class SectionTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.fromLTRB(4, 28, 0, 12),
-        child: Row(children: [
-          Expanded(child: Semantics(header: true, child: Text(title, style: context.text.titleLarge))),
-          ?trailing,
-        ]),
-      );
+    padding: const EdgeInsets.fromLTRB(4, 28, 0, 12),
+    child: Row(
+      children: [
+        Expanded(
+          child: Semantics(header: true, child: Text(title, style: context.text.titleLarge)),
+        ),
+        ?trailing,
+      ],
+    ),
+  );
 }
 
 /// Round icon badge used across tiles.
@@ -182,11 +189,11 @@ class IconBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(color: background ?? context.tokens.cardHigh, shape: BoxShape.circle),
-        child: Icon(icon, size: size * 0.5, color: foreground ?? context.colors.onSurface),
-      );
+    width: size,
+    height: size,
+    decoration: BoxDecoration(color: background ?? context.tokens.cardHigh, shape: BoxShape.circle),
+    child: Icon(icon, size: size * 0.5, color: foreground ?? context.colors.onSurface),
+  );
 }
 
 /// Rounded-square coloured icon, as in WhatsApp / iOS settings rows.
@@ -198,18 +205,18 @@ class SquircleIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color.lerp(color, Colors.white, 0.15)!, color],
-          ),
-          borderRadius: BorderRadius.circular(size * 0.3),
-        ),
-        child: Icon(icon, size: size * 0.55, color: Colors.white),
-      );
+    width: size,
+    height: size,
+    decoration: BoxDecoration(
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [Color.lerp(color, Colors.white, 0.15)!, color],
+      ),
+      borderRadius: BorderRadius.circular(size * 0.3),
+    ),
+    child: Icon(icon, size: size * 0.55, color: Colors.white),
+  );
 }
 
 /// Instagram-story style gradient ring around a circular child. [seen] greys it out.
@@ -229,9 +236,7 @@ class GradientRing extends StatelessWidget {
       padding: const EdgeInsets.all(2.5),
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        gradient: seen
-            ? null
-            : SweepGradient(colors: colors ?? [a, b, const Color(0xFFFF4D8D), a]),
+        gradient: seen ? null : SweepGradient(colors: colors ?? [a, Color.lerp(a, Colors.white, 0.45)!, b, a]),
         color: seen ? context.tokens.line : null,
       ),
       child: Container(
@@ -273,19 +278,20 @@ class _AuroraBackgroundState extends State<AuroraBackground> with SingleTickerPr
   Widget build(BuildContext context) {
     final still = MediaQuery.disableAnimationsOf(context);
     // Sized by the child (cards) or by the parent when there is no child (backdrops).
-    return Stack(children: [
-      Positioned.fill(
-        child: RepaintBoundary(
-          child: AnimatedBuilder(
-            animation: _c,
-            builder: (context, _) => CustomPaint(
-              painter: _AuroraPainter(widget.colors, still ? 0.2 : _c.value, widget.intensity),
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: RepaintBoundary(
+            child: AnimatedBuilder(
+              animation: _c,
+              builder: (context, _) =>
+                  CustomPaint(painter: _AuroraPainter(widget.colors, still ? 0.2 : _c.value, widget.intensity)),
             ),
           ),
         ),
-      ),
-      widget.child ?? const SizedBox.expand(),
-    ]);
+        widget.child ?? const SizedBox.expand(),
+      ],
+    );
   }
 }
 
@@ -307,10 +313,12 @@ class _AuroraPainter extends CustomPainter {
         c,
         r,
         Paint()
-          ..shader = RadialGradient(colors: [
-            colors[i].withValues(alpha: intensity),
-            colors[i].withValues(alpha: 0),
-          ]).createShader(Rect.fromCircle(center: c, radius: r)),
+          ..shader = RadialGradient(
+            colors: [
+              colors[i].withValues(alpha: intensity),
+              colors[i].withValues(alpha: 0),
+            ],
+          ).createShader(Rect.fromCircle(center: c, radius: r)),
       );
     }
   }
@@ -340,9 +348,7 @@ class ConfidenceRing extends StatelessWidget {
         height: size,
         child: CustomPaint(
           painter: _RingPainter(v, c, track ?? context.tokens.cardHigh),
-          child: Center(
-            child: center ?? Text('${(v * 100).round()}%', style: context.text.headlineMedium),
-          ),
+          child: Center(child: center ?? Text('${(v * 100).round()}%', style: context.text.headlineMedium)),
         ),
       ),
     );
@@ -377,40 +383,45 @@ class GlassPanel extends StatelessWidget {
   final EdgeInsetsGeometry padding;
   final double radius;
   final double tint;
-  const GlassPanel(
-      {super.key, required this.child, this.padding = const EdgeInsets.all(16), this.radius = 24, this.tint = 0.4});
+  const GlassPanel({
+    super.key,
+    required this.child,
+    this.padding = const EdgeInsets.all(16),
+    this.radius = 24,
+    this.tint = 0.4,
+  });
 
   @override
   Widget build(BuildContext context) => ClipRRect(
-        borderRadius: BorderRadius.circular(radius),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-          child: Container(
-            padding: padding,
-            decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: tint),
-              borderRadius: BorderRadius.circular(radius),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
-            ),
-            child: child,
-          ),
+    borderRadius: BorderRadius.circular(radius),
+    child: BackdropFilter(
+      filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+      child: Container(
+        padding: padding,
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: tint),
+          borderRadius: BorderRadius.circular(radius),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
         ),
-      );
+        child: child,
+      ),
+    ),
+  );
 }
 
 Color severityColor(BuildContext context, Severity s) => switch (s) {
-      Severity.info => context.colors.primary,
-      Severity.success => context.tokens.success,
-      Severity.warning => context.tokens.warning,
-      Severity.danger => context.tokens.danger,
-    };
+  Severity.info => context.colors.primary,
+  Severity.success => context.tokens.success,
+  Severity.warning => context.tokens.warning,
+  Severity.danger => context.tokens.danger,
+};
 
 IconData activityIcon(ActivityKind k, Severity s) => switch (k) {
-      ActivityKind.note => Icons.payments_rounded,
-      ActivityKind.authenticity => s == Severity.danger ? Icons.gpp_bad_rounded : Icons.verified_user_rounded,
-      ActivityKind.obstacle => Icons.warning_amber_rounded,
-      ActivityKind.system => Icons.info_rounded,
-    };
+  ActivityKind.note => Icons.payments_rounded,
+  ActivityKind.authenticity => s == Severity.danger ? Icons.gpp_bad_rounded : Icons.verified_user_rounded,
+  ActivityKind.obstacle => Icons.warning_amber_rounded,
+  ActivityKind.system => Icons.info_rounded,
+};
 
 String timeAgo(DateTime t) {
   final d = DateTime.now().difference(t);
@@ -456,23 +467,33 @@ class AlertBanner extends StatelessWidget {
             color: context.tokens.card,
             borderRadius: BorderRadius.circular(24),
             border: Border.all(color: c.withValues(alpha: 0.6), width: 1.5),
-            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.3), blurRadius: 30, offset: const Offset(0, 12))],
+            boxShadow: [
+              BoxShadow(color: Colors.black.withValues(alpha: 0.3), blurRadius: 30, offset: const Offset(0, 12)),
+            ],
           ),
-          child: Row(children: [
-            IconBadge(activityIcon(event.kind, event.severity), background: c, foreground: Colors.black, size: 44),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-                Text(event.title, style: context.text.titleMedium),
-                if (event.detail.isNotEmpty)
-                  Text(event.detail,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: context.text.bodyMedium?.copyWith(color: context.tokens.muted)),
-              ]),
-            ),
-            IconButton(onPressed: onClose, icon: const Icon(Icons.close_rounded), tooltip: 'Dismiss'),
-          ]),
+          child: Row(
+            children: [
+              IconBadge(activityIcon(event.kind, event.severity), background: c, foreground: Colors.black, size: 44),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(event.title, style: context.text.titleMedium),
+                    if (event.detail.isNotEmpty)
+                      Text(
+                        event.detail,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: context.text.bodyMedium?.copyWith(color: context.tokens.muted),
+                      ),
+                  ],
+                ),
+              ),
+              IconButton(onPressed: onClose, icon: const Icon(Icons.close_rounded), tooltip: 'Dismiss'),
+            ],
+          ),
         ),
       ),
     );

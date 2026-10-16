@@ -46,7 +46,17 @@ class S {
       'Hali ya vitu. Shika simu usawa wa kifua na utembee polepole.');
   String get pointAtNote => _p('Point the camera at a note', 'Elekeza kamera kwenye noti');
   String get describing => _p('Describing your surroundings', 'Ninaeleza mazingira yako');
-  String get modelMissing => _p('Money recognition is not installed', 'Utambuzi wa pesa haujasakinishwa');
+  String get modelMissing => _p('Money recognition is missing from this version. Please update NoteLens.',
+      'Utambuzi wa pesa haupo kwenye toleo hili. Tafadhali sasisha NoteLens.');
+  String gettingReady(int seconds) => _p('Getting NoteLens ready. About ${secondsWords(seconds)}.',
+      'Natayarisha NoteLens. Takriban ${secondsWords(seconds)}.');
+  String secondsWords(int n) => n <= 1
+      ? _p('one second', 'sekunde moja')
+      : n < 60
+          ? _p('$n seconds', 'sekunde $n')
+          : _p('${(n / 60).ceil()} minutes', 'dakika ${(n / 60).ceil()}');
+  String loadingStatus(int percent, int seconds) => _p('Getting ready, $percent percent, about ${secondsWords(seconds)} left',
+      'Inatayarishwa, asilimia $percent, takriban ${secondsWords(seconds)} zimebaki');
   String get noNote => _p('No note in view', 'Hakuna noti');
   String get tooDark => _p('Too dark. Move to better light.', 'Giza sana. Nenda kwenye mwanga zaidi.');
   String get lowLightTorch => _p('Low light. Turning the light on.', 'Mwanga hafifu. Ninawasha tochi.');
@@ -165,9 +175,9 @@ class S {
   String get micUnavailable =>
       _p('Voice commands are not available on this phone.', 'Amri za sauti hazipatikani kwenye simu hii.');
   String get commandsHelp => _p(
-      'You can say: scan money, what is in front of me, read my total, add, check fake, repeat, light, '
+      'You can say: scan money, tell me more about this note, what is in front of me, read my total, add, check fake, repeat, light, '
           'teach a note, home, wallet, settings, faster, slower, what time is it, or stop.',
-      'Unaweza kusema: soma pesa, nini kiko mbele yangu, jumla yangu, ongeza, kagua bandia, rudia, tochi, '
+      'Unaweza kusema: soma pesa, maelezo ya noti, nini kiko mbele yangu, jumla yangu, ongeza, kagua bandia, rudia, tochi, '
           'fundisha noti, nyumbani, pochi, mipangilio, haraka, polepole, saa ngapi, au simama.');
   String totals(String list) => _p('Your total is $list.', 'Jumla yako ni $list.');
   String get noTotals => _p('Your wallet is empty.', 'Pochi yako haina kitu.');

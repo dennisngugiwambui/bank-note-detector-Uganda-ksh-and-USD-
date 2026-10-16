@@ -138,7 +138,7 @@ class SettingsScreen extends StatelessWidget {
                   icon: Icons.info_rounded,
                   color: const Color(0xFF64748B),
                   title: 'About & privacy',
-                  summary: 'Offline · version 0.4.0',
+                  summary: 'Offline · version 0.6.0',
                   onTap: () => open('About & privacy', (_) => const _AboutPage()),
                 ),
               ]),
@@ -544,19 +544,13 @@ class _MoneyPage extends StatelessWidget {
     final scope = AppScope.of(context);
     final s = scope.settings;
     return Column(children: [
-      if (!scope.scan.hasCurrencyModel) ...[
+      if (scope.scan.modelsLoaded && !scope.scan.hasCurrencyModel) ...[
         BentoCard(
           color: context.tokens.warning.withValues(alpha: 0.14),
           child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Icon(Icons.info_rounded, color: context.tokens.warning),
             const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                'The banknote model is not installed in this build, so notes cannot be identified yet. '
-                'These settings apply once it is.',
-                style: context.text.bodyMedium,
-              ),
-            ),
+            Expanded(child: Text(s.strings.modelMissing, style: context.text.bodyMedium)),
           ]),
         ),
         const SizedBox(height: 14),
@@ -566,6 +560,12 @@ class _MoneyPage extends StatelessWidget {
             label: s.sensitivity < 0.75 ? 'Faster' : s.sensitivity < 0.9 ? 'Balanced' : 'Most certain'),
         _Switch('Automatic light', 'Turn on the flashlight in the dark', s.autoTorch,
             (v) => s.update((x) => x.autoTorch = v)),
+        _Switch(
+            s.strings.t('Say colour and animal', 'Taja rangi na mnyama'),
+            s.strings.t('After the value, for example: Red, with the buffalo. Say "details" to hear more.',
+                'Baada ya thamani, kwa mfano: Nyekundu, ina nyati. Sema "maelezo" kusikia zaidi.'),
+            s.noteFeatures,
+            (v) => s.update((x) => x.noteFeatures = v)),
       ]),
       const SizedBox(height: 14),
       _Group(children: [
@@ -689,7 +689,7 @@ class _AboutPage extends StatelessWidget {
       _Info('Object model', scan.hasDetector ? 'EfficientDet-Lite2 · 80 objects' : 'Not installed'),
       _Info('Scene model', scan.hasSceneClassifier ? 'EfficientNet-Lite0 · 1000 things' : 'Not installed'),
       const _Info('Privacy', 'Works offline. Images never leave the phone.'),
-      const _Info('Version', '0.4.0'),
+      const _Info('Version', '0.6.0'),
     ]);
   }
 }

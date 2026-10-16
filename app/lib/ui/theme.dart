@@ -4,10 +4,9 @@ import '../core/settings.dart';
 
 /// Design tokens.
 ///
-/// Light theme follows Bolt's system (measured from bolt.eu): Inter at heavy
-/// display weights, a green-tinted off-white canvas (#F7F9F8), near-black
-/// green text (#191F1C), pill buttons, 16/32/40 px radii and very soft tinted
-/// shadows. Dark theme follows TikTok / Instagram dark mode: true-black canvas,
+/// Light theme (the default): white canvas, NoteLens green accent, soft
+/// light-green cards, near-black text, pill buttons and large radii, in the
+/// clean commerce-app style. Dark theme follows TikTok / Instagram dark mode: true-black canvas,
 /// layered greys, white type, one vivid accent. Every text/background pair
 /// keeps at least 4.5:1 contrast; high-contrast mode raises that further.
 class AppTokens extends ThemeExtension<AppTokens> {
@@ -72,18 +71,21 @@ ThemeData buildTheme(AppSettings s, Brightness brightness) {
   final dark = hc || brightness == Brightness.dark;
   final accent = hc ? const Color(0xFFFFD600) : Color(s.accentColor);
   final onAccent = ThemeData.estimateBrightnessForColor(accent) == Brightness.dark ? Colors.white : const Color(0xFF0B0D0C);
-  final ink = dark ? Colors.white : const Color(0xFF191F1C);
+  final ink = dark ? Colors.white : const Color(0xFF101914);
 
   final tokens = AppTokens(
-    canvas: hc ? Colors.black : (dark ? const Color(0xFF060708) : const Color(0xFFF7F9F8)),
+    canvas: hc ? Colors.black : (dark ? const Color(0xFF060708) : Colors.white),
     card: hc ? Colors.black : (dark ? const Color(0xFF121417) : Colors.white),
-    cardHigh: hc ? const Color(0xFF111111) : (dark ? const Color(0xFF1C1F24) : const Color(0xFFEEF2F0)),
-    line: hc ? Colors.white : (dark ? const Color(0x1AFFFFFF) : const Color(0x14012212)),
-    muted: hc ? Colors.white : (dark ? const Color(0xFF9AA0A9) : const Color(0xFF59625D)),
+    // Light green tint of the accent: the "green cards".
+    cardHigh: hc
+        ? const Color(0xFF111111)
+        : (dark ? const Color(0xFF1C1F24) : Color.alphaBlend(accent.withValues(alpha: 0.09), const Color(0xFFF6F8F7))),
+    line: hc ? Colors.white : (dark ? const Color(0x1AFFFFFF) : const Color(0xFFE5EBE7)),
+    muted: hc ? Colors.white : (dark ? const Color(0xFF9AA0A9) : const Color(0xFF5E6B63)),
     success: dark ? const Color(0xFF34D399) : const Color(0xFF1F9D63),
     warning: dark ? const Color(0xFFFBBF24) : const Color(0xFFB7791F),
     danger: dark ? const Color(0xFFFF6B6B) : const Color(0xFFD64545),
-    shadow: dark ? const Color(0x00000000) : const Color(0x11012212),
+    shadow: dark ? const Color(0x00000000) : const Color(0x0D0B3D1E),
     borderWidth: hc ? 2 : 0,
   );
 

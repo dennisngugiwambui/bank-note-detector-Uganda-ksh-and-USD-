@@ -52,6 +52,7 @@ class BanknoteApp extends StatelessWidget {
               enabled: s.voiceGuide,
               announcer: scope.scan.announcer,
               strings: () => s.strings,
+              onDisable: () => s.update((x) => x.voiceGuide = false),
               child: child!,
             ),
           ),

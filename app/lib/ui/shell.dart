@@ -72,8 +72,10 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       } else {
         final st = scope.settings;
         final explain = st.voiceGuide && !st.guideIntroduced && !MediaQuery.accessibleNavigationOf(context);
-        scope.scan.announcer.say(explain ? '${st.strings.appReady} ${st.strings.voiceGuideOn}' : st.strings.appReady,
-            priority: Priority.normal);
+        scope.scan.announcer.say(
+          explain ? '${st.strings.appReady} ${st.strings.voiceGuideOn}' : st.strings.appReady,
+          priority: Priority.normal,
+        );
         if (explain) st.update((x) => x.guideIntroduced = true);
         if (scope.settings.listenOnOpen) _listen();
       }
@@ -172,6 +174,8 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       case Command.checkFake:
         if (_tab != _scanTab) _select(_scanTab, mode: ScanMode.currency);
         scan.checkAuthenticity();
+      case Command.details:
+        scan.describeNote();
       case Command.repeat:
         scan.repeatLast();
       case Command.light:
@@ -266,42 +270,44 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     ];
     return Scaffold(
       extendBody: true,
-      body: Stack(children: [
-        for (var i = 0; i < pages.length; i++)
-          Offstage(
-            offstage: i != _tab,
-            child: TickerMode(
-              enabled: i == _tab,
-              child: AnimatedOpacity(
-                opacity: i == _tab ? 1 : 0,
-                duration: const Duration(milliseconds: 220),
-                child: pages[i],
+      body: Stack(
+        children: [
+          for (var i = 0; i < pages.length; i++)
+            Offstage(
+              offstage: i != _tab,
+              child: TickerMode(
+                enabled: i == _tab,
+                child: AnimatedOpacity(
+                  opacity: i == _tab ? 1 : 0,
+                  duration: const Duration(milliseconds: 220),
+                  child: pages[i],
+                ),
+              ),
+            ),
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: SafeArea(
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 300),
+                switchInCurve: Curves.easeOutBack,
+                transitionBuilder: (child, a) => SlideTransition(
+                  position: Tween(begin: const Offset(0, -1.4), end: Offset.zero).animate(a),
+                  child: child,
+                ),
+                child: _banner == null
+                    ? const SizedBox.shrink()
+                    : AlertBanner(
+                        key: ValueKey(_banner),
+                        event: _banner!,
+                        onClose: () => setState(() => _banner = null),
+                      ),
               ),
             ),
           ),
-        Positioned(
-          top: 0,
-          left: 0,
-          right: 0,
-          child: SafeArea(
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 300),
-              switchInCurve: Curves.easeOutBack,
-              transitionBuilder: (child, a) => SlideTransition(
-                position: Tween(begin: const Offset(0, -1.4), end: Offset.zero).animate(a),
-                child: child,
-              ),
-              child: _banner == null
-                  ? const SizedBox.shrink()
-                  : AlertBanner(
-                      key: ValueKey(_banner),
-                      event: _banner!,
-                      onClose: () => setState(() => _banner = null),
-                    ),
-            ),
-          ),
-        ),
-      ]),
+        ],
+      ),
       bottomNavigationBar: ListenableBuilder(
         listenable: scope.activity,
         builder: (context, _) => _NavBar(
@@ -328,7 +334,13 @@ class _NavBar extends StatelessWidget {
   final int unread;
   final bool overCamera;
   final void Function(int) onSelect;
-  const _NavBar({required this.labels, required this.index, required this.unread, required this.overCamera, required this.onSelect});
+  const _NavBar({
+    required this.labels,
+    required this.index,
+    required this.unread,
+    required this.overCamera,
+    required this.onSelect,
+  });
 
   static const _items = <(IconData, IconData)>[
     (NavIcons.home, NavIcons.homeFill),
@@ -344,37 +356,55 @@ class _NavBar extends StatelessWidget {
     final dark = overCamera || context.isDark;
     final ink = dark ? Colors.white : context.colors.onSurface;
     final muted = dark ? Colors.white.withValues(alpha: 0.55) : t.muted;
-    final bg = overCamera ? Colors.black.withValues(alpha: 0.6) : t.canvas.withValues(alpha: 0.9);
-    return ClipRect(
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 28, sigmaY: 28),
-        child: Container(
-          decoration: BoxDecoration(
-            color: bg,
-            border: Border(top: BorderSide(color: overCamera ? Colors.white10 : t.line)),
-          ),
-          child: SafeArea(
-            top: false,
-            child: SizedBox(
-              height: 72,
-              child: Row(children: [
-                for (var i = 0; i < _items.length; i++)
-                  Expanded(
-                    child: i == 2
-                        ? _ScanButton(
-                            selected: index == 2, onTap: () => onSelect(2), icon: _items[2].$2, label: labels[2])
-                        : _NavItem(
-                            icon: index == i ? _items[i].$2 : _items[i].$1,
-                            label: labels[i],
-                            selected: index == i,
-                            ink: ink,
-                            muted: muted,
-                            dark: dark,
-                            badge: i == 1 ? unread : 0,
-                            onTap: () => onSelect(i),
-                          ),
-                  ),
-              ]),
+    final bg = overCamera ? Colors.black.withValues(alpha: 0.6) : t.card.withValues(alpha: 0.92);
+    // A floating pill, as in modern commerce apps.
+    return SafeArea(
+      top: false,
+      minimum: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(36),
+          boxShadow: overCamera
+              ? null
+              : [const BoxShadow(color: Color(0x1F0B3D1E), blurRadius: 30, offset: Offset(0, 10))],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(36),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 28, sigmaY: 28),
+            child: Container(
+              decoration: BoxDecoration(
+                color: bg,
+                borderRadius: BorderRadius.circular(36),
+                border: Border.all(color: overCamera ? Colors.white10 : t.line),
+              ),
+              child: SizedBox(
+                height: 72,
+                child: Row(
+                  children: [
+                    for (var i = 0; i < _items.length; i++)
+                      Expanded(
+                        child: i == 2
+                            ? _ScanButton(
+                                selected: index == 2,
+                                onTap: () => onSelect(2),
+                                icon: _items[2].$2,
+                                label: labels[2],
+                              )
+                            : _NavItem(
+                                icon: index == i ? _items[i].$2 : _items[i].$1,
+                                label: labels[i],
+                                selected: index == i,
+                                ink: ink,
+                                muted: muted,
+                                dark: dark,
+                                badge: i == 1 ? unread : 0,
+                                onTap: () => onSelect(i),
+                              ),
+                      ),
+                  ],
+                ),
+              ),
             ),
           ),
         ),
@@ -417,43 +447,46 @@ class _NavItem extends StatelessWidget {
       child: Pressable(
         onTap: onTap,
         pressedScale: 0.9,
-        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 320),
-            curve: Curves.easeOutCubic,
-            width: selected ? 60 : 40,
-            height: 32,
-            decoration: BoxDecoration(
-              color: selected ? pill : Colors.transparent,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Center(
-              child: Badge(
-                isLabelVisible: badge > 0,
-                backgroundColor: const Color(0xFFFF3B5C),
-                textStyle: const TextStyle(fontFamily: 'Inter', fontSize: 10, fontWeight: FontWeight.w700),
-                label: Text(badge > 99 ? '99+' : '$badge'),
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 200),
-                  transitionBuilder: (c, a) => ScaleTransition(scale: a, child: c),
-                  child: Icon(icon, key: ValueKey(icon), size: 24, color: selected ? (dark ? accent : ink) : muted),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 320),
+              curve: Curves.easeOutCubic,
+              width: selected ? 60 : 40,
+              height: 32,
+              decoration: BoxDecoration(
+                color: selected ? pill : Colors.transparent,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Center(
+                child: Badge(
+                  isLabelVisible: badge > 0,
+                  backgroundColor: const Color(0xFFFF3B5C),
+                  textStyle: const TextStyle(fontFamily: 'Inter', fontSize: 10, fontWeight: FontWeight.w700),
+                  label: Text(badge > 99 ? '99+' : '$badge'),
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 200),
+                    transitionBuilder: (c, a) => ScaleTransition(scale: a, child: c),
+                    child: Icon(icon, key: ValueKey(icon), size: 24, color: selected ? (dark ? accent : ink) : muted),
+                  ),
                 ),
               ),
             ),
-          ),
-          const SizedBox(height: 4),
-          AnimatedDefaultTextStyle(
-            duration: const Duration(milliseconds: 200),
-            style: TextStyle(
-              fontFamily: 'Inter',
-              fontSize: 11.5,
-              letterSpacing: 0.1,
-              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-              color: selected ? ink : muted,
+            const SizedBox(height: 4),
+            AnimatedDefaultTextStyle(
+              duration: const Duration(milliseconds: 200),
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 11.5,
+                letterSpacing: 0.1,
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                color: selected ? ink : muted,
+              ),
+              child: Text(label, maxLines: 1, overflow: TextOverflow.fade, softWrap: false),
             ),
-            child: Text(label, maxLines: 1, overflow: TextOverflow.fade, softWrap: false),
-          ),
-        ]),
+          ],
+        ),
       ),
     );
   }
@@ -495,7 +528,11 @@ class _ScanButton extends StatelessWidget {
                 ),
                 border: Border.all(color: Colors.white.withValues(alpha: selected ? 0.9 : 0.25), width: 2),
                 boxShadow: [
-                  BoxShadow(color: a.withValues(alpha: selected ? 0.6 : 0.4), blurRadius: selected ? 22 : 16, offset: const Offset(0, 6)),
+                  BoxShadow(
+                    color: a.withValues(alpha: selected ? 0.6 : 0.4),
+                    blurRadius: selected ? 22 : 16,
+                    offset: const Offset(0, 6),
+                  ),
                 ],
               ),
               child: Icon(icon, size: 28, color: context.colors.onPrimary),

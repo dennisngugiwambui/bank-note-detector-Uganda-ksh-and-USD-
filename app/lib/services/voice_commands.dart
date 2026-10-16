@@ -10,6 +10,7 @@ enum Command {
   total,
   add,
   checkFake,
+  details,
   repeat,
   light,
   teach,
@@ -32,6 +33,10 @@ const _rules = <(Command, List<String>)>[
   (Command.guideOff, ['voice guide off', 'turn off voice guide', 'zima mwongozo']),
   (Command.guideOn, ['voice guide on', 'turn on voice guide', 'washa mwongozo']),
   (Command.checkFake, ['fake', 'counterfeit', 'genuine', 'real or', 'bandia', 'feki', 'halali']),
+  (Command.details, [
+    'details', 'detail', 'more about', 'tell me more', 'features', 'what does it look like', 'colour', 'color',
+    'animal', 'maelezo', 'sifa', 'rangi', 'mnyama', 'inafananaje',
+  ]),
   (Command.teach, ['teach', 'learn', 'fundisha', 'jifunze']),
   (Command.total, ['total', 'how much', 'count', 'jumla', 'ngapi pesa', 'pesa ngapi', 'hesabu']),
   (Command.add, ['add', 'ongeza', 'weka']),

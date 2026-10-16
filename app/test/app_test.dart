@@ -85,15 +85,17 @@ void main() {
     addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
 
     final settings = await AppSettings.load();
-    expect(settings.voiceGuide, isTrue); // on by default for blind users
-    settings.update((x) => x.voiceGuide = false); // this test taps like a sighted helper
+    expect(settings.voiceGuide, isFalse); // normal touch until the user asks for the guide
     final auth = await LocalAuthService.load();
     final activity = await ActivityStore.load();
     final scan = ScanController(settings: settings, activity: activity);
     await tester.pumpWidget(AppScope(settings: settings, auth: auth, activity: activity, scan: scan, child: const BanknoteApp()));
     await tester.pumpAndSettle();
 
-    // Setup: language, voice, speed, then the story pages.
+    // Setup: how they use the screen, language, voice, speed, then the story pages.
+    await tester.tap(find.textContaining('I can see the screen'));
+    await tester.pumpAndSettle();
+    expect(settings.voiceGuide, isFalse);
     expect(find.text('Kiswahili'), findsOneWidget);
     await tester.tap(find.text('English'));
     await tester.pumpAndSettle();
@@ -118,11 +120,15 @@ void main() {
     await tester.tap(find.text('Create account'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Amina'), findsOneWidget); // greeting
+    expect(find.text('Hello Amina'), findsOneWidget); // greeting
     expect(find.bySemanticsLabel(RegExp('Double tap to start scanning')), findsOneWidget);
+    // The "getting ready" card may sit above these while the models start.
+    final list = find.byType(Scrollable).first;
+    await tester.scrollUntilVisible(find.text('Voice command'), 200, scrollable: list);
     expect(find.text('Voice command'), findsOneWidget);
-    expect(find.text('Wallet'), findsWidgets); // services tile + nav bar
+    await tester.scrollUntilVisible(find.text('Learn your money'), 200, scrollable: list);
     expect(find.text('Learn your money'), findsOneWidget);
+    expect(find.text('Wallet'), findsWidgets); // services tile + nav bar
 
     // Settings tab: open a sub-page, flip a toggle, it persists, come back.
     await tester.tap(find.bySemanticsLabel('Settings'));
@@ -155,6 +161,7 @@ void main() {
         enabled: true,
         announcer: announcer,
         strings: () => settings.strings,
+        onDisable: () {},
         child: Scaffold(
           body: Center(
             child: ElevatedButton(onPressed: () => pressed++, child: const Text('Pay')),
@@ -181,10 +188,34 @@ void main() {
         enabled: false,
         announcer: announcer,
         strings: () => settings.strings,
+        onDisable: () {},
         child: Scaffold(body: Center(child: ElevatedButton(onPressed: () => pressed++, child: const Text('Pay')))),
       ),
     ));
     await tester.tap(button);
     expect(pressed, 2);
+  });
+
+  testWidgets('voice guide chip: two ordinary taps turn the guide off', (tester) async {
+    final settings = await AppSettings.load();
+    final announcer = Announcer(settings);
+    var disabled = 0;
+    await tester.pumpWidget(MaterialApp(
+      home: VoiceGuide(
+        enabled: true,
+        announcer: announcer,
+        strings: () => settings.strings,
+        onDisable: () => disabled++,
+        child: const Scaffold(body: SizedBox.expand()),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Voice guide · Turn off'));
+    await tester.pump();
+    expect(disabled, 0); // the first tap only warns
+    expect(find.text('Tap again to turn off'), findsOneWidget);
+    await tester.tap(find.text('Tap again to turn off'));
+    await tester.pump(const Duration(seconds: 5));
+    expect(disabled, 1);
   });
 }

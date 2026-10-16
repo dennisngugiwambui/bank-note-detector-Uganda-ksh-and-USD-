@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:banknote_identifier/core/currency.dart';
+import 'package:banknote_identifier/core/note_facts.dart';
 import 'package:banknote_identifier/core/strings.dart';
 import 'package:banknote_identifier/ml/currency_classifier.dart';
 import 'package:banknote_identifier/ml/frame.dart';
@@ -299,6 +300,49 @@ void main() {
       expect(missing, isEmpty);
       expect(spokenName('space bar'), 'keyboard');
       expect(spokenName('running shoe'), 'shoes');
+    });
+  });
+
+  group('note facts', () {
+    test('every Kenyan and Ugandan note and coin has a fact', () {
+      for (final iso in ['KES', 'UGX']) {
+        for (final (note, fact) in factsOf(currencyInfo(iso)!)) {
+          expect(fact, isNotNull, reason: note.label);
+          expect(fact!.briefSw, isNotEmpty);
+        }
+      }
+    });
+
+    test('every model label has a fact, except background and some coins', () {
+      final labels = File('assets/currency/labels.txt').readAsLinesSync().where((l) => l.trim().isNotEmpty);
+      for (final l in labels) {
+        if (l == backgroundLabel || l.startsWith('EGP') || (l.startsWith('INR') && l.endsWith('coin'))) continue;
+        expect(noteFacts.containsKey(l), isTrue, reason: l);
+        expect(noteFacts[l]!.recognised, isTrue, reason: l);
+      }
+    });
+
+    test('details name the note, the animal and the shared front', () {
+      const en = S('en'), sw = S('sw');
+      final d = detailsFor(const Note('KES', 500), en);
+      expect(d, startsWith('500 Kenyan shillings'));
+      expect(d, contains('lion'));
+      expect(d, contains('Kenyatta International Convention Centre'));
+      expect(detailsFor(const Note('KES', 50), sw).toLowerCase(), contains('nyati'));
+      expect(briefFor(const Note('KES', 20, coin: true), en), contains('elephant'));
+      expect(noteFacts['UGX_500_coin']!.recognised, isFalse);
+    });
+
+    test('"details" is a voice command and does not become scan money', () {
+      expect(parseCommand('tell me more about this note'), Command.details);
+      expect(parseCommand('maelezo'), Command.details);
+      expect(parseCommand('scan money'), Command.scanMoney);
+    });
+
+    test('loading time is spoken in words', () {
+      expect(const S('en').loadingStatus(45, 3), 'Getting ready, 45 percent, about 3 seconds left');
+      expect(const S('en').secondsWords(1), 'one second');
+      expect(const S('sw').secondsWords(90), 'dakika 2');
     });
   });
 }

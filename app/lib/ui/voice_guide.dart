@@ -23,8 +23,19 @@ class VoiceGuide extends StatefulWidget {
   final bool enabled;
   final Announcer announcer;
   final S Function() strings;
+
+  /// Turns the guide off. Called from the "Voice Guide" chip, which takes
+  /// normal taps so a sighted helper can always switch it off.
+  final VoidCallback onDisable;
   final Widget child;
-  const VoiceGuide({super.key, required this.enabled, required this.announcer, required this.strings, required this.child});
+  const VoiceGuide({
+    super.key,
+    required this.enabled,
+    required this.announcer,
+    required this.strings,
+    required this.onDisable,
+    required this.child,
+  });
 
   @override
   State<VoiceGuide> createState() => _VoiceGuideState();
@@ -140,7 +151,12 @@ class _VoiceGuideState extends State<VoiceGuide> {
     });
     if (changed || speakEmpty) {
       widget.announcer.buzz(Buzz.light);
-      widget.announcer.say(_describe(e.$1.getSemanticsData()), priority: Priority.urgent, dedupe: Duration.zero, force: true);
+      widget.announcer.say(
+        _describe(e.$1.getSemanticsData()),
+        priority: Priority.urgent,
+        dedupe: Duration.zero,
+        force: true,
+      );
     }
   }
 
@@ -167,8 +183,8 @@ class _VoiceGuideState extends State<VoiceGuide> {
     final action = d.hasAction(SemanticsAction.tap)
         ? SemanticsAction.tap
         : d.hasAction(SemanticsAction.longPress)
-            ? SemanticsAction.longPress
-            : null;
+        ? SemanticsAction.longPress
+        : null;
     if (action == null) return;
     widget.announcer.buzz(Buzz.success);
     _owner?.performAction(e.$1.id, action);
@@ -213,7 +229,12 @@ class _VoiceGuideState extends State<VoiceGuide> {
         Future<void>.delayed(const Duration(milliseconds: 200), () {
           final again = _focused();
           if (again != null && mounted) {
-            widget.announcer.say(again.$1.getSemanticsData().value, priority: Priority.urgent, dedupe: Duration.zero, force: true);
+            widget.announcer.say(
+              again.$1.getSemanticsData().value,
+              priority: Priority.urgent,
+              dedupe: Duration.zero,
+              force: true,
+            );
           }
         });
         return;
@@ -256,41 +277,132 @@ class _VoiceGuideState extends State<VoiceGuide> {
   Widget build(BuildContext context) {
     if (!_active) return widget.child;
     final accent = Theme.of(context).colorScheme.primary;
-    return Stack(children: [
-      widget.child,
-      Positioned.fill(
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTapDown: (d) => _downAt = d.globalPosition,
-          onTap: _onTap,
-          onDoubleTapDown: (d) => _downAt = d.globalPosition,
-          onDoubleTap: _onDoubleTap,
-          onLongPress: CommandCenter.instance.listen,
-          onHorizontalDragEnd: (d) {
-            final v = d.primaryVelocity ?? 0;
-            if (v.abs() > 250) _move(v > 0 ? 1 : -1);
-          },
-          onVerticalDragEnd: (d) {
-            final v = d.primaryVelocity ?? 0;
-            // Finger moving up = content up = scroll down / increase.
-            if (v.abs() > 250) _vertical(v < 0);
-          },
+    return Stack(
+      children: [
+        widget.child,
+        Positioned.fill(
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTapDown: (d) => _downAt = d.globalPosition,
+            onTap: _onTap,
+            onDoubleTapDown: (d) => _downAt = d.globalPosition,
+            onDoubleTap: _onDoubleTap,
+            onLongPress: CommandCenter.instance.listen,
+            onHorizontalDragEnd: (d) {
+              final v = d.primaryVelocity ?? 0;
+              if (v.abs() > 250) _move(v > 0 ? 1 : -1);
+            },
+            onVerticalDragEnd: (d) {
+              final v = d.primaryVelocity ?? 0;
+              // Finger moving up = content up = scroll down / increase.
+              if (v.abs() > 250) _vertical(v < 0);
+            },
+          ),
         ),
-      ),
-      if (_focusRect != null)
-        Positioned.fromRect(
-          rect: _focusRect!.inflate(3),
-          child: IgnorePointer(
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 150),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: accent, width: 3),
-                boxShadow: [BoxShadow(color: accent.withValues(alpha: 0.35), blurRadius: 14)],
+        Positioned(
+          top: 0,
+          right: 0,
+          child: SafeArea(
+            child: _GuideChip(strings: widget.strings, announcer: widget.announcer, onDisable: widget.onDisable),
+          ),
+        ),
+        if (_focusRect != null)
+          Positioned.fromRect(
+            rect: _focusRect!.inflate(3),
+            child: IgnorePointer(
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: accent, width: 3),
+                  boxShadow: [BoxShadow(color: accent.withValues(alpha: 0.35), blurRadius: 14)],
+                ),
               ),
             ),
           ),
+      ],
+    );
+  }
+}
+
+/// "Voice Guide on" chip in the top corner. It takes ordinary taps: the first
+/// tap warns (aloud and on screen), a second tap within 4 s turns the guide off.
+class _GuideChip extends StatefulWidget {
+  final S Function() strings;
+  final Announcer announcer;
+  final VoidCallback onDisable;
+  const _GuideChip({required this.strings, required this.announcer, required this.onDisable});
+
+  @override
+  State<_GuideChip> createState() => _GuideChipState();
+}
+
+class _GuideChipState extends State<_GuideChip> {
+  DateTime? _armed;
+
+  bool get _isArmed => _armed != null && DateTime.now().difference(_armed!) < const Duration(seconds: 4);
+
+  void _tap() {
+    final s = widget.strings();
+    if (_isArmed) {
+      widget.onDisable();
+      widget.announcer.say(s.voiceGuideOff, priority: Priority.urgent, dedupe: Duration.zero, force: true);
+      return;
+    }
+    setState(() => _armed = DateTime.now());
+    widget.announcer.say(
+      s.t('Tap again to turn off the voice guide.', 'Gusa tena kuzima mwongozo wa sauti.'),
+      priority: Priority.urgent,
+      dedupe: Duration.zero,
+      force: true,
+    );
+    Future<void>.delayed(const Duration(seconds: 4), () {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.strings();
+    final scheme = Theme.of(context).colorScheme;
+    final armed = _isArmed;
+    return Padding(
+      padding: const EdgeInsets.all(8),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: _tap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: armed ? scheme.error : scheme.primary,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 10, offset: Offset(0, 3))],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                armed ? Icons.touch_app_rounded : Icons.record_voice_over_rounded,
+                size: 16,
+                color: armed ? scheme.onError : scheme.onPrimary,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                armed
+                    ? s.t('Tap again to turn off', 'Gusa tena kuzima')
+                    : s.t('Voice guide · Turn off', 'Mwongozo · Zima'),
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: armed ? scheme.onError : scheme.onPrimary,
+                ),
+              ),
+            ],
+          ),
         ),
-    ]);
+      ),
+    );
   }
 }

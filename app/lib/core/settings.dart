@@ -20,7 +20,7 @@ class AppSettings extends ChangeNotifier {
   }
 
   // Appearance
-  ThemeMode themeMode = ThemeMode.dark;
+  ThemeMode themeMode = ThemeMode.light;
   int accentColor = accentChoices.first.toARGB32();
   bool highContrast = false;
   double textScale = 1.0;
@@ -37,15 +37,16 @@ class AppSettings extends ChangeNotifier {
 
   // Accessibility
   /// Built-in screen reader: touch to hear, double tap to activate. Ignored
-  /// while TalkBack or VoiceOver is on.
-  bool voiceGuide = true;
+  /// while TalkBack or VoiceOver is on. Off unless the user asks for it on the
+  /// first screen, because it replaces normal taps and swipes.
+  bool voiceGuide = false;
   bool listenOnOpen = false; // start a voice command whenever the app opens
   bool showAlertBanners = false; // visual pop-ups; voice and vibration always happen
 
   // Detection
   /// Minimum calibrated confidence for announcing a note. Higher = fewer
   /// mistakes, slower answers. Set it from training/evaluate_tflite.py.
-  double sensitivity = 0.85;
+  double sensitivity = 0.9; // 98% per-frame precision on held-out photos (training/export_v2.log)
   bool autoTorch = true;
   bool notesInObjectsMode = true; // also announce money while describing surroundings
   Set<String> enabledCurrencies = {'INR', 'KES', 'EGP', 'UGX', 'USD'};
@@ -56,6 +57,9 @@ class AppSettings extends ChangeNotifier {
   bool proximityVibration = true; // vibrates faster as an obstacle in the path gets closer
   DistanceUnit distanceUnit = DistanceUnit.metres;
   DirectionStyle directionStyle = DirectionStyle.simple;
+
+  // Money
+  bool noteFeatures = true; // say the colour and animal after the value
 
   // Authenticity
   bool uvLampAvailable = false;
@@ -70,6 +74,7 @@ class AppSettings extends ChangeNotifier {
   String get speechLocale => appLanguages[language]?.$3 ?? 'en_US';
 
   static const accentChoices = <Color>[
+    Color(0xFF15803D), // NoteLens green: 5:1 against white
     Color(0xFFC6F24E), // lime
     Color(0xFF8B7CF6), // violet
     Color(0xFF4ADE80), // mint
@@ -80,8 +85,8 @@ class AppSettings extends ChangeNotifier {
 
   void _read() {
     final p = _prefs;
-    themeMode = ThemeMode.values[p.getInt('themeMode') ?? ThemeMode.dark.index];
-    accentColor = p.getInt('accentColor') ?? accentColor;
+    themeMode = ThemeMode.values[p.getInt('themeMode2') ?? themeMode.index];
+    accentColor = p.getInt('accentColor2') ?? accentColor;
     highContrast = p.getBool('highContrast') ?? highContrast;
     textScale = p.getDouble('textScale') ?? textScale;
     language = p.getString('language') ?? language;
@@ -93,7 +98,8 @@ class AppSettings extends ChangeNotifier {
     pitch = p.getDouble('pitch') ?? pitch;
     haptics = p.getBool('haptics') ?? haptics;
     announceTotals = p.getBool('announceTotals') ?? announceTotals;
-    voiceGuide = p.getBool('voiceGuide') ?? voiceGuide;
+    // New key: 0.4/0.5 turned the guide on for everyone, which blocked normal touch.
+    voiceGuide = p.getBool('voiceGuide2') ?? voiceGuide;
     listenOnOpen = p.getBool('listenOnOpen') ?? listenOnOpen;
     showAlertBanners = p.getBool('showAlertBanners') ?? showAlertBanners;
     sensitivity = p.getDouble('sensitivity') ?? sensitivity;
@@ -105,6 +111,7 @@ class AppSettings extends ChangeNotifier {
     proximityVibration = p.getBool('proximityVibration') ?? proximityVibration;
     distanceUnit = DistanceUnit.values[(p.getInt('distanceUnit') ?? distanceUnit.index).clamp(0, 2)];
     directionStyle = DirectionStyle.values[(p.getInt('directionStyle') ?? directionStyle.index).clamp(0, 1)];
+    noteFeatures = p.getBool('noteFeatures') ?? noteFeatures;
     uvLampAvailable = p.getBool('uvLampAvailable') ?? uvLampAvailable;
     backlightStep = p.getBool('backlightStep') ?? backlightStep;
     onboardingDone = p.getBool('onboardingDone') ?? onboardingDone;
@@ -114,8 +121,8 @@ class AppSettings extends ChangeNotifier {
   void _save(void Function() change) {
     change();
     final p = _prefs;
-    p.setInt('themeMode', themeMode.index);
-    p.setInt('accentColor', accentColor);
+    p.setInt('themeMode2', themeMode.index);
+    p.setInt('accentColor2', accentColor);
     p.setBool('highContrast', highContrast);
     p.setDouble('textScale', textScale);
     p.setString('language', language);
@@ -127,7 +134,7 @@ class AppSettings extends ChangeNotifier {
     p.setDouble('pitch', pitch);
     p.setBool('haptics', haptics);
     p.setBool('announceTotals', announceTotals);
-    p.setBool('voiceGuide', voiceGuide);
+    p.setBool('voiceGuide2', voiceGuide);
     p.setBool('listenOnOpen', listenOnOpen);
     p.setBool('showAlertBanners', showAlertBanners);
     p.setDouble('sensitivity', sensitivity);
@@ -139,6 +146,7 @@ class AppSettings extends ChangeNotifier {
     p.setBool('proximityVibration', proximityVibration);
     p.setInt('distanceUnit', distanceUnit.index);
     p.setInt('directionStyle', directionStyle.index);
+    p.setBool('noteFeatures', noteFeatures);
     p.setBool('uvLampAvailable', uvLampAvailable);
     p.setBool('backlightStep', backlightStep);
     p.setBool('onboardingDone', onboardingDone);

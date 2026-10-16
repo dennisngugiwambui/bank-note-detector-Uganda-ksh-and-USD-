@@ -22,3 +22,26 @@ Resuming: head epochs done 5/5, fine-tune epochs done 1/12, best val accuracy 0.
 46 classes, train=22894 val=1453 test=1390
 Head phase already done.
 Epoch 2/12
+715/715 - 964s - 1s/step - accuracy: 0.7557 - loss: 1.4338 - val_accuracy: 0.8685 - val_loss: 1.2339
+Epoch 3/12
+715/715 - 960s - 1s/step - accuracy: 0.8102 - loss: 1.2958 - val_accuracy: 0.8383 - val_loss: 1.2140
+Epoch 4/12
+715/715 - 13484s - 19s/step - accuracy: 0.8278 - loss: 1.2469 - val_accuracy: 0.8823 - val_loss: 1.1578
+Epoch 5/12
+715/715 - 45638s - 64s/step - accuracy: 0.8494 - loss: 1.1913 - val_accuracy: 0.8796 - val_loss: 1.1427
+Epoch 6/12
+715/715 - 893s - 1s/step - accuracy: 0.8575 - loss: 1.1654 - val_accuracy: 0.8919 - val_loss: 1.1190
+Epoch 7/12
+715/715 - 788s - 1s/step - accuracy: 0.8699 - loss: 1.1394 - val_accuracy: 0.8968 - val_loss: 1.1042
+Epoch 8/12
+715/715 - 807s - 1s/step - accuracy: 0.8730 - loss: 1.1255 - val_accuracy: 0.8947 - val_loss: 1.0925
+Epoch 9/12
+715/715 - 1011s - 1s/step - accuracy: 0.8780 - loss: 1.1149 - val_accuracy: 0.9098 - val_loss: 1.0704
+Epoch 10/12
+715/715 - 983s - 1s/step - accuracy: 0.8824 - loss: 1.1033 - val_accuracy: 0.9181 - val_loss: 1.0611
+Epoch 11/12
+715/715 - 1095s - 2s/step - accuracy: 0.8830 - loss: 1.1010 - val_accuracy: 0.9057 - val_loss: 1.0674
+Epoch 12/12
+715/715 - 956s - 1s/step - accuracy: 0.8846 - loss: 1.0921 - val_accuracy: 0.9119 - val_loss: 1.0631
+temperature=0.55  test accuracy=0.9072
+saved to runs\v2

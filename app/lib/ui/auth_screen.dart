@@ -78,10 +78,10 @@ class _AuthScreenState extends State<AuthScreen> {
     final accent = context.colors.primary;
     final t = context.tokens;
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: Color.lerp(accent, Colors.black, 0.15),
       body: AuroraBackground(
-        colors: [accent, context.colors.secondary, const Color(0xFF1E1B4B)],
-        intensity: 0.45,
+        colors: [accent, Color.lerp(accent, Colors.white, 0.3)!, Color.lerp(accent, Colors.black, 0.3)!],
+        intensity: 0.35,
         child: SizedBox.expand(
           child: SafeArea(
             bottom: false,

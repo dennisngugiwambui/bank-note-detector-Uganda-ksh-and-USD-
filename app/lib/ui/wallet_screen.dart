@@ -149,11 +149,11 @@ class _BankCard extends StatelessWidget {
   const _BankCard({required this.iso, required this.total, required this.index});
 
   static const _palettes = [
-    [Color(0xFF0F2027), Color(0xFF2C5364)],
-    [Color(0xFF42275A), Color(0xFF734B6D)],
-    [Color(0xFF134E5E), Color(0xFF71B280)],
-    [Color(0xFF232526), Color(0xFF414345)],
-    [Color(0xFF3A1C71), Color(0xFFD76D77)],
+    [Color(0xFF14532D), Color(0xFF15803D)],
+    [Color(0xFF166534), Color(0xFF22C55E)],
+    [Color(0xFF134E4A), Color(0xFF0F766E)],
+    [Color(0xFF1A2E05), Color(0xFF4D7C0F)],
+    [Color(0xFF052E16), Color(0xFF16A34A)],
   ];
 
   @override
